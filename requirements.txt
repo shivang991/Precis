@@ -5,11 +5,13 @@ uvicorn[standard]==0.32.1
 # Settings & validation
 pydantic==2.9.2
 pydantic-settings==2.6.1
+email-validator==2.3.0
 
 # Database
 sqlalchemy==2.0.36
 asyncpg==0.30.0
 alembic==1.14.0
+greenlet==3.3.2
 
 # Auth
 python-jose[cryptography]==3.3.0
