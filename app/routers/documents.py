@@ -16,8 +16,7 @@ from app.schemas.document import (
 )
 from app.services import storage
 from app.services.standard_format import build_standard_format
-from app.services.pdf_processor import process_digital_pdf
-from app.services.ocr_processor import process_scanned_pdf
+from app.services.pdf_extractor import extract_pdf
 from app.config import get_settings
 
 settings = get_settings()
@@ -38,18 +37,15 @@ async def _process_document(document_id: uuid.UUID, db: AsyncSession) -> None:
 
         pdf_bytes = await storage.download_file(doc.storage_key)
 
-        if doc.source == DocumentSource.DIGITAL:
-            nodes, page_count = process_digital_pdf(pdf_bytes)
-        else:
-            nodes, page_count = process_scanned_pdf(pdf_bytes)
+        result = extract_pdf(pdf_bytes, doc.source)
 
         doc.standard_format = build_standard_format(
             title=doc.title,
-            nodes=nodes,
+            nodes=result.nodes,
             source=doc.source.value,
-            page_count=page_count,
+            page_count=result.page_count,
         )
-        doc.page_count = page_count
+        doc.page_count = result.page_count
         doc.status = DocumentStatus.READY
 
     except Exception as e:
