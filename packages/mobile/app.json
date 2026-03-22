@@ -1,0 +1,34 @@
+{
+  "expo": {
+    "name": "Precis",
+    "slug": "precis",
+    "version": "1.0.0",
+    "orientation": "default",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.precis.app"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
+      },
+      "package": "com.precis.app"
+    },
+    "web": {
+      "bundler": "metro"
+    },
+    "scheme": "precis",
+    "plugins": [
+      "expo-router",
+      "expo-document-picker"
+    ]
+  }
+}

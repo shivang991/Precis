@@ -1,0 +1,9 @@
+{
+  "extends": "expo/tsconfig.base",
+  "compilerOptions": {
+    "strict": true,
+    "paths": {
+      "@precis/shared": ["../shared/src/index.ts"]
+    }
+  }
+}

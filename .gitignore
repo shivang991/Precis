@@ -39,3 +39,26 @@ htmlcov/
 
 # Alembic
 alembic/versions/*.pyc
+
+# Node / pnpm
+node_modules/
+.pnpm-store/
+
+# Turborepo
+.turbo/
+
+# Expo / React Native
+packages/mobile/.expo/
+packages/mobile/dist/
+packages/mobile/android/
+packages/mobile/ios/
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.orig.*
+web-build/
+
+# TypeScript
+*.tsbuildinfo
