@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: precis-api-config
+  namespace: precis
+data:
+  DEBUG: "false"
+  STORAGE_REGION: "us-east-1"
+  STORAGE_ENDPOINT_URL: ""   # Leave empty for AWS S3; set for MinIO/Cloudflare R2
+  MAX_UPLOAD_SIZE_MB: "50"
+  OCR_LANGUAGE: "eng"
+  GOOGLE_REDIRECT_URI: "https://REPLACE_ME/api/v1/auth/callback"

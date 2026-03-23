@@ -1,0 +1,26 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: precis-api
+  namespace: precis
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: "55m"   # Accommodate MAX_UPLOAD_SIZE_MB + overhead
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "120"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "120"
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: api.REPLACE_ME   # e.g. api.yourdomain.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: precis-api
+                port:
+                  number: 80
+  # tls:
+  #   - hosts:
+  #       - api.REPLACE_ME
+  #     secretName: precis-api-tls

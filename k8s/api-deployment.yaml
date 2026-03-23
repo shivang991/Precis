@@ -20,9 +20,12 @@ spec:
           image: precis-api:latest
           ports:
             - containerPort: 8000
+          imagePullPolicy: Always
           envFrom:
             - secretRef:
                 name: precis-api-secrets
+            - configMapRef:
+                name: precis-api-config
           resources:
             requests:
               cpu: "250m"
