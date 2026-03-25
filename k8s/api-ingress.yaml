@@ -10,8 +10,7 @@ metadata:
 spec:
   ingressClassName: nginx
   rules:
-    - host: api.REPLACE_ME   # e.g. api.yourdomain.com
-      http:
+    - http:
         paths:
           - path: /
             pathType: Prefix
@@ -19,8 +18,4 @@ spec:
               service:
                 name: precis-api
                 port:
-                  number: 80
-  # tls:
-  #   - hosts:
-  #       - api.REPLACE_ME
-  #     secretName: precis-api-tls
+                  number: 8000
