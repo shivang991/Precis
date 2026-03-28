@@ -29,6 +29,9 @@
     "plugins": [
       "expo-router",
       "expo-document-picker"
-    ]
+    ],
+    "extra": {
+      "apiBaseUrl": "https://precisapi.shivang991.com"
+    }
   }
 }
