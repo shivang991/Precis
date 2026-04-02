@@ -14,9 +14,9 @@ import pytesseract
 from PIL import Image
 from pdf2image import convert_from_bytes
 
-from app.models.document import DocumentSource
-from app.services.standard_format import make_node
-from app.config import get_settings
+from app.documents.models import DocumentSource
+from app.shared.standard_format import make_node
+from app.shared.config import get_settings
 
 
 # ── Config dataclasses ────────────────────────────────────────────────────────

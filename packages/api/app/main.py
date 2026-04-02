@@ -2,14 +2,17 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.config import get_settings
-from app.database import engine, Base
-from app.routers import auth, documents, highlights, export, users
+from app.shared.config import get_settings
+from app.shared.database import engine, Base
+from app.users.router import auth_router, users_router
+from app.documents.router import router as documents_router
+from app.highlights.router import router as highlights_router
+from app.export.router import router as export_router
 
 # Import models so SQLAlchemy registers them before create_all
-import app.models.user       # noqa: F401
-import app.models.document   # noqa: F401
-import app.models.highlight  # noqa: F401
+import app.users.models       # noqa: F401
+import app.documents.models   # noqa: F401
+import app.highlights.models  # noqa: F401
 
 settings = get_settings()
 
@@ -42,11 +45,11 @@ app.add_middleware(
 )
 
 _prefix = settings.api_v1_prefix
-app.include_router(auth.router,       prefix=_prefix)
-app.include_router(users.router,      prefix=_prefix)
-app.include_router(documents.router,  prefix=_prefix)
-app.include_router(highlights.router, prefix=_prefix)
-app.include_router(export.router,     prefix=_prefix)
+app.include_router(auth_router,       prefix=_prefix)
+app.include_router(users_router,      prefix=_prefix)
+app.include_router(documents_router,  prefix=_prefix)
+app.include_router(highlights_router, prefix=_prefix)
+app.include_router(export_router,     prefix=_prefix)
 
 
 @app.get("/health")

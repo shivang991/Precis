@@ -5,9 +5,9 @@ from jose import JWTError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
-from app.core.security import decode_access_token
-from app.database import get_db
-from app.models.user import User
+from app.shared.security import decode_access_token
+from app.shared.database import get_db
+from app.users.models import User
 
 bearer_scheme = HTTPBearer()
 

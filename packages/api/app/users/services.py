@@ -6,9 +6,9 @@ import httpx
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
-from app.config import get_settings
-from app.models.user import User
-from app.core.security import create_access_token
+from app.shared.config import get_settings
+from app.users.models import User
+from app.shared.security import create_access_token
 
 settings = get_settings()
 

@@ -3,21 +3,24 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database import get_db
-from app.services.auth_service import get_google_auth_url, login_with_google
-from app.core.dependencies import get_current_user
-from app.schemas.user import UserRead
-from app.models.user import User
+from app.shared.database import get_db
+from app.shared.dependencies import get_current_user
+from app.users.models import User
+from app.users.schemas import UserRead, UserUpdateSettings
+from app.users.services import get_google_auth_url, login_with_google
 
-router = APIRouter(prefix="/auth", tags=["auth"])
+auth_router = APIRouter(prefix="/auth", tags=["auth"])
+users_router = APIRouter(prefix="/users", tags=["users"])
 
+
+# ── Auth routes ───────────────────────────────────────────────────────────────
 
 class TokenExchangeRequest(BaseModel):
     code: str
     redirect_uri: str | None = None
 
 
-@router.get("/login")
+@auth_router.get("/login")
 async def google_login(
     redirect_uri: str | None = Query(
         default=None,
@@ -29,7 +32,7 @@ async def google_login(
     return {"url": get_google_auth_url(state, redirect_uri)}
 
 
-@router.get("/callback")
+@auth_router.get("/callback")
 async def google_callback(
     code: str = Query(...),
     redirect_uri: str | None = Query(default=None),
@@ -43,7 +46,7 @@ async def google_callback(
     return {"access_token": token, "token_type": "bearer"}
 
 
-@router.post("/token")
+@auth_router.post("/token")
 async def exchange_token(
     body: TokenExchangeRequest,
     db: AsyncSession = Depends(get_db),
@@ -61,6 +64,26 @@ async def exchange_token(
     return {"access_token": token, "token_type": "bearer"}
 
 
-@router.get("/me", response_model=UserRead)
+@auth_router.get("/me", response_model=UserRead)
 async def me(current_user: User = Depends(get_current_user)):
+    return current_user
+
+
+# ── Users routes ──────────────────────────────────────────────────────────────
+
+@users_router.get("/me", response_model=UserRead)
+async def get_me(current_user: User = Depends(get_current_user)):
+    return current_user
+
+
+@users_router.patch("/me/settings", response_model=UserRead)
+async def update_general_settings(
+    body: UserUpdateSettings,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Update user-level general settings (theme, heading preference)."""
+    for field, value in body.model_dump(exclude_none=True).items():
+        setattr(current_user, field, value)
+    await db.flush()
     return current_user

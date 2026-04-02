@@ -6,18 +6,18 @@ from fastapi import (
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
-from app.database import get_db
-from app.core.dependencies import get_current_user
-from app.models.user import User
-from app.models.document import Document, DocumentStatus, DocumentSource
-from app.schemas.document import (
+from app.shared.database import get_db
+from app.shared.dependencies import get_current_user
+from app.shared import storage
+from app.shared.standard_format import build_standard_format
+from app.shared.config import get_settings
+from app.users.models import User
+from app.documents.models import Document, DocumentStatus, DocumentSource
+from app.documents.schemas import (
     DocumentRead, DocumentReadWithContent,
     DocumentUpdateSettings, DocumentUpdateContent,
 )
-from app.services import storage
-from app.services.standard_format import build_standard_format
-from app.services.pdf_extractor import extract_pdf
-from app.config import get_settings
+from app.documents.services import extract_pdf
 
 settings = get_settings()
 router = APIRouter(prefix="/documents", tags=["documents"])

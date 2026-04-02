@@ -4,7 +4,7 @@ from enum import Enum as PyEnum
 from sqlalchemy import String, DateTime, ForeignKey, func, Enum, Text
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from app.database import Base
+from app.shared.database import Base
 
 
 class DocumentStatus(str, PyEnum):
@@ -45,7 +45,7 @@ class Document(Base):
     theme: Mapped[str | None] = mapped_column(String(64), nullable=True)
     include_headings_in_summary: Mapped[bool | None] = mapped_column(nullable=True)
 
-    # The Standard Format document tree (see services/standard_format.py)
+    # The Standard Format document tree (see shared/standard_format.py)
     standard_format: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
 
     page_count: Mapped[int | None] = mapped_column(nullable=True)

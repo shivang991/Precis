@@ -3,15 +3,15 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
-from app.database import get_db
-from app.core.dependencies import get_current_user
-from app.models.user import User
-from app.models.document import Document
-from app.models.highlight import Highlight
-from app.schemas.highlight import (
+from app.shared.database import get_db
+from app.shared.dependencies import get_current_user
+from app.shared.standard_format import get_ancestors, build_summary_sections
+from app.users.models import User
+from app.documents.models import Document
+from app.highlights.models import Highlight
+from app.highlights.schemas import (
     HighlightCreate, HighlightRead, HighlightUpdate, SummaryView, SummarySection,
 )
-from app.services.standard_format import get_ancestors, build_summary_sections
 
 router = APIRouter(prefix="/documents/{document_id}/highlights", tags=["highlights"])
 

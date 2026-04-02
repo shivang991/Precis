@@ -4,7 +4,7 @@ from sqlalchemy import String, DateTime, ForeignKey, func, Text, Integer
 from sqlalchemy.dialects.postgresql import UUID, ARRAY
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy import String as SAString
-from app.database import Base
+from app.shared.database import Base
 
 
 class Highlight(Base):

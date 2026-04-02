@@ -5,7 +5,7 @@ Object storage abstraction — wraps boto3 for S3-compatible backends
 
 import uuid
 import aioboto3
-from app.config import get_settings
+from app.shared.config import get_settings
 
 settings = get_settings()
 

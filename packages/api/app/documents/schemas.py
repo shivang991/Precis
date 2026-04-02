@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 from pydantic import BaseModel
-from app.models.document import DocumentStatus, DocumentSource
+from app.documents.models import DocumentStatus, DocumentSource
 
 
 # ── Standard Format node types ────────────────────────────────────────────────

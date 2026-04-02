@@ -4,15 +4,15 @@ from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
-from app.database import get_db
-from app.core.dependencies import get_current_user
-from app.models.user import User
-from app.models.document import Document
-from app.models.highlight import Highlight
-from app.schemas.document import StandardFormat
-from app.schemas.highlight import SummaryView
-from app.services.export_service import export_standard_format_to_pdf, export_summary_to_pdf
-from app.services.standard_format import build_summary_sections
+from app.shared.database import get_db
+from app.shared.dependencies import get_current_user
+from app.shared.standard_format import build_summary_sections
+from app.users.models import User
+from app.documents.models import Document
+from app.documents.schemas import StandardFormat
+from app.highlights.models import Highlight
+from app.highlights.schemas import SummaryView
+from app.export.services import export_standard_format_to_pdf, export_summary_to_pdf
 
 router = APIRouter(prefix="/export", tags=["export"])
 

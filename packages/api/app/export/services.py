@@ -5,8 +5,8 @@ using WeasyPrint (HTML → PDF pipeline, theme-aware).
 
 import io
 from weasyprint import HTML, CSS
-from app.schemas.document import StandardFormat
-from app.schemas.highlight import SummaryView
+from app.documents.schemas import StandardFormat
+from app.highlights.schemas import SummaryView
 
 
 _BASE_CSS = """
