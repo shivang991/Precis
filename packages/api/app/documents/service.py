@@ -38,9 +38,6 @@ class DocumentService:
             raise DocumentNotFoundError()
         return doc
 
-    def _sse(self, event: str, data: dict) -> str:
-        return f"event: {event}\ndata: {json.dumps(data)}\n\n"
-
     async def standard_format_generator(
         self, document_id: uuid.UUID, user: User
     ) -> AsyncIterator[str]:
