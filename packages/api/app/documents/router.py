@@ -64,7 +64,7 @@ async def process_document(
     svc: DocumentService = Depends(_get_service),
 ):
     return StreamingResponse(
-        svc.build_standard_format(document_id, current_user),
+        svc.standard_format_generator(document_id, current_user),
         media_type="text/event-stream",
     )
 

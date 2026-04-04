@@ -41,7 +41,7 @@ class DocumentService:
     def _sse(self, event: str, data: dict) -> str:
         return f"event: {event}\ndata: {json.dumps(data)}\n\n"
 
-    async def build_standard_format(
+    async def standard_format_generator(
         self, document_id: uuid.UUID, user: User
     ) -> AsyncIterator[str]:
         doc = await self._get_owned_doc(document_id, user)
@@ -49,7 +49,7 @@ class DocumentService:
         try:
             doc.status = DocumentStatus.PROCESSING
             await self.db.flush()
-            yield self._sse("processing", {})
+            yield "started"
 
             pdf_bytes = await storage.download_file(doc.storage_key)
             extraction = extract_pdf(pdf_bytes, doc.source)
@@ -63,13 +63,13 @@ class DocumentService:
             doc.page_count = extraction.page_count
             doc.status = DocumentStatus.READY
             await self.db.commit()
-            yield self._sse("ready", {"page_count": doc.page_count})
+            yield "ready"
 
         except Exception as e:
             doc.status = DocumentStatus.FAILED
             doc.error_message = str(e)
             await self.db.commit()
-            yield self._sse("error", {"message": str(e)})
+            yield "error"
 
     async def list_documents(self, user: User) -> list[Document]:
         result = await self.db.execute(
