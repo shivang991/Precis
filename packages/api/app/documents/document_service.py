@@ -11,7 +11,7 @@ from app.shared.config import get_settings
 from app.users.models import User
 from app.documents.models import Document, DocumentStatus, DocumentSource
 from app.documents.schemas import DocumentUpdateSettings, DocumentUpdateContent
-from app.documents.services import extract_pdf
+from app.documents.parser_service import ParserService
 from app.documents.errors import (
     DocumentNotFoundError,
     DocumentNotProcessedError,
@@ -23,8 +23,9 @@ settings = get_settings()
 
 
 class DocumentService:
-    def __init__(self, db: AsyncSession) -> None:
+    def __init__(self, db: AsyncSession, parser: ParserService | None = None) -> None:
         self.db = db
+        self.parser = parser or ParserService()
 
     async def _get_owned_doc(self, document_id: uuid.UUID, user: User) -> Document:
         result = await self.db.execute(
@@ -49,15 +50,20 @@ class DocumentService:
             yield "started"
 
             pdf_bytes = await storage.download_file(doc.storage_key)
-            extraction = extract_pdf(pdf_bytes, doc.source)
+
+            parsedPdf = (
+                self.parser.parse_digital_pdf(pdf_bytes)
+                if doc.source == DocumentSource.DIGITAL
+                else self.parser.parse_scanned_pdf(pdf_bytes)
+            )
 
             doc.standard_format = build_standard_format(
                 title=doc.title,
-                nodes=extraction.nodes,
+                nodes=parsedPdf.nodes,
                 source=doc.source.value,
-                page_count=extraction.page_count,
+                page_count=parsedPdf.page_count,
             )
-            doc.page_count = extraction.page_count
+            doc.page_count = parsedPdf.page_count
             doc.status = DocumentStatus.READY
             await self.db.commit()
             yield "ready"

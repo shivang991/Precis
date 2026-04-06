@@ -20,7 +20,7 @@ from app.documents.schemas import (
     DocumentUpdateSettings,
     DocumentUpdateContent,
 )
-from app.documents.service import DocumentService
+from packages.api.app.documents.document_service import DocumentService
 
 router = APIRouter(prefix="/documents", tags=["documents"])
 
