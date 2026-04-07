@@ -31,12 +31,19 @@ class HighlightUpdate(BaseModel):
     color: str | None = None
 
 
+class AncestorRef(BaseModel):
+    """A reference to an ancestor heading node in the Standard Format tree."""
+    node_id: str
+    level: int | None = None
+    text: str
+
+
 class SummarySection(BaseModel):
     """A single highlighted passage with its ancestor heading context."""
     highlight_id: str
     color: str
     note: str | None
-    ancestors: list[dict]  # [{ node_id, level, text }, ...]
+    ancestors: list[AncestorRef]
     text: str              # Highlighted text (sliced by offsets if present)
 
 

@@ -6,13 +6,14 @@ import pytesseract
 from PIL import Image
 from pdf2image import convert_from_bytes
 
-from app.shared.standard_format import make_node
+from app.document_content_tree.schemas import StandardFormatNode
+from app.document_content_tree.service import DocumentContentTreeService
 from app.shared.config import get_settings
 
 
 @dataclass(frozen=True)
 class ParsedPDF:
-    nodes: list[dict]
+    nodes: list[StandardFormatNode]
     page_count: int
 
 
@@ -40,7 +41,7 @@ class ParserService:
     # –– Digital PDFs –––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––
 
     def parse_digital_pdf(self, pdf_bytes: bytes) -> ParsedPDF:
-        nodes: list[dict] = []
+        nodes: list[StandardFormatNode] = []
 
         with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
             page_count = len(pdf.pages)
@@ -68,17 +69,17 @@ class ParserService:
 
                     if heading_level:
                         nodes.append(
-                            make_node(
+                            DocumentContentTreeService.make_node(
                                 "heading", text=text, level=heading_level, page=page_num
                             )
                         )
                     else:
-                        nodes.append(make_node("paragraph", text=text, page=page_num))
+                        nodes.append(DocumentContentTreeService.make_node("paragraph", text=text, page=page_num))
 
                 for table in page.extract_tables():
                     if table:
                         nodes.append(
-                            make_node("table", page=page_num, content={"rows": table})
+                            DocumentContentTreeService.make_node("table", page=page_num, content={"rows": table})
                         )
 
         return ParsedPDF(nodes=nodes, page_count=page_count)
@@ -95,7 +96,7 @@ class ParserService:
         lang = get_settings().ocr_language
         images: list[Image.Image] = convert_from_bytes(pdf_bytes, dpi=self.ocr_dpi)
         page_count = len(images)
-        flat_nodes: list[dict] = []
+        flat_nodes: list[StandardFormatNode] = []
 
         for page_num, image in enumerate(images, start=1):
             data = pytesseract.image_to_data(
@@ -121,22 +122,9 @@ class ParserService:
         text: str,
         height: int,
         page: int,
-    ) -> dict:
+    ) -> StandardFormatNode:
         for threshold, level in self.ocr_heading_height_map:
             if height >= threshold:
-                return make_node("heading", text=text, level=level, page=page)
-        return make_node("paragraph", text=text, page=page)
+                return DocumentContentTreeService.make_node("heading", text=text, level=level, page=page)
+        return DocumentContentTreeService.make_node("paragraph", text=text, page=page)
 
-    # –– Utilities –––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––
-
-    def _nest_nodes(self, flat_nodes: list[dict]) -> list[dict]:
-        root: list[dict] = []
-        stack: list[tuple[int, dict]] = [(0, {"children": root})]
-        for node in flat_nodes:
-            level = node.get("level") if node["type"] == "heading" else 999
-            while len(stack) > 1 and stack[-1][0] >= level:
-                stack.pop()
-            stack[-1][1]["children"].append(node)
-            if node["type"] == "heading":
-                stack.append((level, node))
-        return root

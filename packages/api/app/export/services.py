@@ -5,7 +5,7 @@ using WeasyPrint (HTML → PDF pipeline, theme-aware).
 
 import io
 from weasyprint import HTML, CSS
-from app.documents.schemas import StandardFormat
+from app.document_content_tree.schemas import StandardFormatNode, StandardFormat
 from app.highlights.schemas import SummaryView
 
 
@@ -29,21 +29,20 @@ _THEME_CSS: dict[str, str] = {
 }
 
 
-def _nodes_to_html(nodes: list[dict]) -> str:
+def _nodes_to_html(nodes: list[StandardFormatNode]) -> str:
     parts = []
     for node in nodes:
-        ntype = node.get("type")
-        text = node.get("text", "") or ""
+        text = node.text or ""
 
-        if ntype == "heading":
-            lvl = node.get("level", 1)
+        if node.type == "heading":
+            lvl = node.level or 1
             parts.append(f"<h{lvl}>{text}</h{lvl}>")
-        elif ntype == "paragraph":
+        elif node.type == "paragraph":
             parts.append(f"<p>{text}</p>")
-        elif ntype == "list_item":
+        elif node.type == "list_item":
             parts.append(f"<li>{text}</li>")
-        elif ntype == "table":
-            rows = (node.get("content") or {}).get("rows", [])
+        elif node.type == "table":
+            rows = (node.content or {}).get("rows", [])
             html = "<table>"
             for i, row in enumerate(rows):
                 html += "<tr>"
@@ -53,23 +52,21 @@ def _nodes_to_html(nodes: list[dict]) -> str:
                 html += "</tr>"
             html += "</table>"
             parts.append(html)
-        elif ntype == "image":
-            alt = (node.get("content") or {}).get("alt", "")
+        elif node.type == "image":
+            alt = (node.content or {}).get("alt", "")
             parts.append(f"<p><em>[Image: {alt}]</em></p>")
-        elif ntype == "code":
+        elif node.type == "code":
             parts.append(f"<pre><code>{text}</code></pre>")
 
-        # Recurse into children
-        children = node.get("children", [])
-        if children:
-            parts.append(_nodes_to_html(children))
+        if node.children:
+            parts.append(_nodes_to_html(node.children))
 
     return "\n".join(parts)
 
 
 def export_standard_format_to_pdf(doc: StandardFormat, theme: str = "default") -> bytes:
     title = doc.meta.title
-    body_html = _nodes_to_html([n.model_dump() for n in doc.nodes])
+    body_html = _nodes_to_html(doc.nodes)
     html = f"""
     <!DOCTYPE html>
     <html>
@@ -89,19 +86,14 @@ def export_summary_to_pdf(summary: SummaryView, theme: str = "default") -> bytes
     parts = [f"<h1>Summary — {summary.document_title}</h1>"]
 
     for section in summary.sections:
-        ancestors = section.get("ancestors", [])
-        nodes = section.get("nodes", [])
-        color = section.get("color", "yellow")
-        note = section.get("note")
-
-        if ancestors:
-            breadcrumb = " › ".join(a["text"] for a in ancestors)
+        if section.ancestors:
+            breadcrumb = " › ".join(a.text for a in section.ancestors)
             parts.append(f'<p class="ancestor">{breadcrumb}</p>')
 
         parts.append('<div class="highlight">')
-        parts.append(_nodes_to_html(nodes))
-        if note:
-            parts.append(f'<p><strong>Note:</strong> {note}</p>')
+        parts.append(f"<p>{section.text}</p>")
+        if section.note:
+            parts.append(f'<p><strong>Note:</strong> {section.note}</p>')
         parts.append("</div>")
 
     html = f"""

@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
 from app.shared import storage
-from app.shared.standard_format import build_standard_format
+from app.document_content_tree.service import DocumentContentTreeService
 from app.shared.config import get_settings
 from app.users.models import User
 from app.documents.models import Document, DocumentStatus, DocumentSource
@@ -57,7 +57,7 @@ class DocumentService:
                 else self.parser.parse_scanned_pdf(pdf_bytes)
             )
 
-            doc.standard_format = build_standard_format(
+            doc.standard_format = DocumentContentTreeService.build_document(
                 title=doc.title,
                 nodes=parsedPdf.nodes,
                 source=doc.source.value,
@@ -139,20 +139,11 @@ class DocumentService:
             raise DocumentNotProcessedError()
 
         updated_map = {n.id: n.model_dump() for n in body.nodes}
-
-        def _patch_nodes(nodes: list[dict]) -> list[dict]:
-            result = []
-            for node in nodes:
-                if node["id"] in updated_map:
-                    patched = {**node, **updated_map[node["id"]]}
-                    patched["children"] = _patch_nodes(node.get("children", []))
-                    result.append(patched)
-                else:
-                    node["children"] = _patch_nodes(node.get("children", []))
-                    result.append(node)
-            return result
-
-        doc.standard_format["nodes"] = _patch_nodes(doc.standard_format["nodes"])
+        typed_nodes = DocumentContentTreeService.parse_nodes(
+            doc.standard_format["nodes"]
+        )
+        patched = DocumentContentTreeService.patch(typed_nodes, updated_map)
+        doc.standard_format["nodes"] = [n.model_dump() for n in patched]
         await self.db.flush()
         return doc
 

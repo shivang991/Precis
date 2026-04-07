@@ -5,7 +5,8 @@ from sqlalchemy import select
 
 from app.shared.database import get_db
 from app.shared.dependencies import get_current_user
-from app.shared.standard_format import get_ancestors, build_summary_sections
+from app.document_content_tree.service import DocumentContentTreeService
+from app.highlights.services import build_summary_sections
 from app.users.models import User
 from app.documents.models import Document
 from app.highlights.models import Highlight
@@ -54,7 +55,7 @@ async def create_highlight(
 ):
     doc = await _get_owned_doc(document_id, current_user, db)
 
-    ancestor_ids = get_ancestors(doc.standard_format, body.node_id)
+    ancestor_ids = DocumentContentTreeService.get_ancestor_ids(doc.standard_format, body.node_id)
 
     highlight = Highlight(
         document_id=document_id,

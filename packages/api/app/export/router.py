@@ -6,10 +6,10 @@ from sqlalchemy import select
 
 from app.shared.database import get_db
 from app.shared.dependencies import get_current_user
-from app.shared.standard_format import build_summary_sections
 from app.users.models import User
 from app.documents.models import Document
-from app.documents.schemas import StandardFormat
+from app.document_content_tree.schemas import StandardFormat
+from app.highlights.services import build_summary_sections
 from app.highlights.models import Highlight
 from app.highlights.schemas import SummaryView
 from app.export.services import export_standard_format_to_pdf, export_summary_to_pdf
