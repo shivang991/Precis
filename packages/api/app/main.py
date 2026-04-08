@@ -9,8 +9,6 @@ from app.shared.exceptions import DomainError
 from app.users.router import auth_router, users_router
 from app.documents.router import router as documents_router
 from app.highlights.router import router as highlights_router
-from app.export.router import router as export_router
-
 # Import models so SQLAlchemy registers them before create_all
 import app.users.models  # noqa: F401
 import app.documents.models  # noqa: F401
@@ -57,7 +55,6 @@ app.include_router(auth_router, prefix=_prefix)
 app.include_router(users_router, prefix=_prefix)
 app.include_router(documents_router, prefix=_prefix)
 app.include_router(highlights_router, prefix=_prefix)
-app.include_router(export_router, prefix=_prefix)
 
 
 @app.get("/health")
