@@ -1,55 +1,49 @@
-import secrets
-from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.shared.database import get_db
 from app.shared.dependencies import get_current_user
 from app.users.models import User
-from app.users.schemas import UserRead, UserUpdateSettings
-from app.users.services import get_google_auth_url, login_with_google
+from app.users.schemas import UserRead, UserUpdateSettings, TokenExchangeRequest, GoogleAuthUrl, TokenResponse
+from app.users.service import UserService
 
 auth_router = APIRouter(prefix="/auth", tags=["auth"])
 users_router = APIRouter(prefix="/users", tags=["users"])
 
 
+def _get_service(db: AsyncSession = Depends(get_db)) -> UserService:
+    return UserService(db)
+
+
 # ── Auth routes ───────────────────────────────────────────────────────────────
 
-class TokenExchangeRequest(BaseModel):
-    code: str
-    redirect_uri: str | None = None
 
-
-@auth_router.get("/login")
+@auth_router.get("/login", response_model=GoogleAuthUrl)
 async def google_login(
     redirect_uri: str | None = Query(
         default=None,
         description="Override redirect URI — pass the mobile deep link (e.g. precis://auth) for app-based OAuth.",
-    )
+    ),
+    svc: UserService = Depends(_get_service),
 ):
     """Return the Google OAuth redirect URL for the client to navigate to."""
-    state = secrets.token_urlsafe(16)
-    return {"url": get_google_auth_url(state, redirect_uri)}
+    return svc.get_google_auth_url(redirect_uri)
 
 
-@auth_router.get("/callback")
+@auth_router.get("/callback", response_model=TokenResponse)
 async def google_callback(
     code: str = Query(...),
     redirect_uri: str | None = Query(default=None),
-    db: AsyncSession = Depends(get_db),
+    svc: UserService = Depends(_get_service),
 ):
     """Exchange Google auth code for a Precis JWT (web callback)."""
-    try:
-        token = await login_with_google(db, code, redirect_uri)
-    except Exception as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
-    return {"access_token": token, "token_type": "bearer"}
+    return await svc.login_with_google(code, redirect_uri)
 
 
-@auth_router.post("/token")
+@auth_router.post("/token", response_model=TokenResponse)
 async def exchange_token(
     body: TokenExchangeRequest,
-    db: AsyncSession = Depends(get_db),
+    svc: UserService = Depends(_get_service),
 ):
     """
     Exchange a Google OAuth code for a Precis JWT (mobile / POST flow).
@@ -57,11 +51,7 @@ async def exchange_token(
     The mobile app uses expo-auth-session which captures the code via deep link,
     then POSTs it here with the same redirect_uri it passed to /login.
     """
-    try:
-        token = await login_with_google(db, body.code, body.redirect_uri)
-    except Exception as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
-    return {"access_token": token, "token_type": "bearer"}
+    return await svc.login_with_google(body.code, body.redirect_uri)
 
 
 @auth_router.get("/me", response_model=UserRead)
@@ -70,6 +60,7 @@ async def me(current_user: User = Depends(get_current_user)):
 
 
 # ── Users routes ──────────────────────────────────────────────────────────────
+
 
 @users_router.get("/me", response_model=UserRead)
 async def get_me(current_user: User = Depends(get_current_user)):
@@ -80,10 +71,7 @@ async def get_me(current_user: User = Depends(get_current_user)):
 async def update_general_settings(
     body: UserUpdateSettings,
     current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
+    svc: UserService = Depends(_get_service),
 ):
     """Update user-level general settings (theme, heading preference)."""
-    for field, value in body.model_dump(exclude_none=True).items():
-        setattr(current_user, field, value)
-    await db.flush()
-    return current_user
+    return await svc.update_settings(current_user, body)

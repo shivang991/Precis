@@ -21,3 +21,17 @@ class UserRead(UserBase):
 class UserUpdateSettings(BaseModel):
     default_theme: str | None = None
     include_headings_in_summary: bool | None = None
+
+
+class TokenExchangeRequest(BaseModel):
+    code: str
+    redirect_uri: str | None = None
+
+
+class GoogleAuthUrl(BaseModel):
+    url: str
+
+
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
