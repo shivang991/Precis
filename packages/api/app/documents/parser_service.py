@@ -1,8 +1,10 @@
 import io
 from dataclasses import dataclass
+from typing import Annotated
 
 import pdfplumber
 import pytesseract
+from fastapi import Depends
 from PIL import Image
 from pdf2image import convert_from_bytes
 
@@ -18,6 +20,9 @@ class ParsedPDF:
 
 
 class ParserService:
+
+    def __init__(self, tree_svc: Annotated[DocumentContentTreeService, Depends(DocumentContentTreeService)]) -> None:
+        self.tree_svc = tree_svc
 
     # ── Configuration ───────────────────────────────────────────────────────────────────
 
@@ -100,13 +105,13 @@ class ParserService:
                             nodes[-1].text += " " + text
                         elif heading_level:
                             nodes.append(
-                                DocumentContentTreeService.make_node(
+                                self.tree_svc.make_node(
                                     "heading", text=text, level=heading_level, page=page_num
                                 )
                             )
                         else:
                             nodes.append(
-                                DocumentContentTreeService.make_node(
+                                self.tree_svc.make_node(
                                     "paragraph", text=text, page=page_num
                                 )
                             )
@@ -120,7 +125,7 @@ class ParserService:
                 for table in page.extract_tables():
                     if table:
                         nodes.append(
-                            DocumentContentTreeService.make_node("table", page=page_num, content={"rows": table})
+                            self.tree_svc.make_node("table", page=page_num, content={"rows": table})
                         )
 
         return ParsedPDF(nodes=nodes, page_count=page_count)
@@ -205,6 +210,6 @@ class ParserService:
     ) -> DocumentContentTreeNode:
         level = self._ocr_height_to_heading_level(height)
         if level:
-            return DocumentContentTreeService.make_node("heading", text=text, level=level, page=page)
-        return DocumentContentTreeService.make_node("paragraph", text=text, page=page)
+            return self.tree_svc.make_node("heading", text=text, level=level, page=page)
+        return self.tree_svc.make_node("paragraph", text=text, page=page)
 

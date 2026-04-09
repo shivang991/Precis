@@ -8,9 +8,6 @@ from fastapi import (
     status,
 )
 from fastapi.responses import StreamingResponse
-from sqlalchemy.ext.asyncio import AsyncSession
-
-from app.shared.database import get_db
 from app.shared.dependencies import get_current_user
 from app.users.models import User
 from app.documents.models import DocumentSource
@@ -20,19 +17,15 @@ from app.documents.schemas import (
     DocumentUpdateSettings,
     DocumentUpdateContent,
 )
-from packages.api.app.documents.document_service import DocumentService
+from app.documents.document_service import DocumentService
 
 router = APIRouter(prefix="/documents", tags=["documents"])
-
-
-def _get_service(db: AsyncSession = Depends(get_db)) -> DocumentService:
-    return DocumentService(db)
 
 
 @router.get("/", response_model=list[DocumentRead])
 async def list_documents(
     current_user: User = Depends(get_current_user),
-    svc: DocumentService = Depends(_get_service),
+    svc: DocumentService = Depends(DocumentService),
 ):
     return await svc.list_documents(current_user)
 
@@ -45,7 +38,7 @@ async def upload_document(
     source: DocumentSource = Form(DocumentSource.DIGITAL),
     title: str = Form(""),
     current_user: User = Depends(get_current_user),
-    svc: DocumentService = Depends(_get_service),
+    svc: DocumentService = Depends(DocumentService),
 ):
     return await svc.upload_document(
         file.filename,
@@ -61,7 +54,7 @@ async def upload_document(
 async def process_document(
     document_id: uuid.UUID,
     current_user: User = Depends(get_current_user),
-    svc: DocumentService = Depends(_get_service),
+    svc: DocumentService = Depends(DocumentService),
 ):
     return StreamingResponse(
         svc.document_content_tree_generator(document_id, current_user),
@@ -73,7 +66,7 @@ async def process_document(
 async def get_document(
     document_id: uuid.UUID,
     current_user: User = Depends(get_current_user),
-    svc: DocumentService = Depends(_get_service),
+    svc: DocumentService = Depends(DocumentService),
 ):
     return await svc.get_document(document_id, current_user)
 
@@ -83,7 +76,7 @@ async def update_document_settings(
     document_id: uuid.UUID,
     body: DocumentUpdateSettings,
     current_user: User = Depends(get_current_user),
-    svc: DocumentService = Depends(_get_service),
+    svc: DocumentService = Depends(DocumentService),
 ):
     return await svc.update_document_settings(document_id, body, current_user)
 
@@ -93,7 +86,7 @@ async def update_document_content(
     document_id: uuid.UUID,
     body: DocumentUpdateContent,
     current_user: User = Depends(get_current_user),
-    svc: DocumentService = Depends(_get_service),
+    svc: DocumentService = Depends(DocumentService),
 ):
     return await svc.update_document_content(document_id, body, current_user)
 
@@ -102,6 +95,6 @@ async def update_document_content(
 async def delete_document(
     document_id: uuid.UUID,
     current_user: User = Depends(get_current_user),
-    svc: DocumentService = Depends(_get_service),
+    svc: DocumentService = Depends(DocumentService),
 ):
     await svc.delete_document(document_id, current_user)

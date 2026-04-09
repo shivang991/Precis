@@ -1,13 +1,15 @@
-import json
 import uuid
 from collections.abc import AsyncIterator
+from typing import Annotated
 
+from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
 from app.shared import storage
 from app.document_content_tree.service import DocumentContentTreeService
 from app.shared.config import get_settings
+from app.shared.database import get_db
 from app.users.models import User
 from app.documents.models import Document, DocumentStatus, DocumentSource
 from app.documents.schemas import DocumentUpdateSettings, DocumentUpdateContent
@@ -23,9 +25,15 @@ settings = get_settings()
 
 
 class DocumentService:
-    def __init__(self, db: AsyncSession, parser: ParserService | None = None) -> None:
+    def __init__(
+        self,
+        db: Annotated[AsyncSession, Depends(get_db)],
+        parser: Annotated[ParserService, Depends(ParserService)],
+        tree_svc: Annotated[DocumentContentTreeService, Depends(DocumentContentTreeService)],
+    ) -> None:
         self.db = db
-        self.parser = parser or ParserService()
+        self.parser = parser
+        self.tree_svc = tree_svc
 
     async def _get_owned_doc(self, document_id: uuid.UUID, user: User) -> Document:
         result = await self.db.execute(
@@ -57,7 +65,7 @@ class DocumentService:
                 else self.parser.parse_scanned_pdf(pdf_bytes)
             )
 
-            doc.document_content_tree = DocumentContentTreeService.build_document(
+            doc.document_content_tree = self.tree_svc.build_document(
                 title=doc.title,
                 nodes=parsedPdf.nodes,
                 source=doc.source.value,
@@ -139,10 +147,10 @@ class DocumentService:
             raise DocumentNotProcessedError()
 
         updated_map = {n.id: n.model_dump() for n in body.nodes}
-        typed_nodes = DocumentContentTreeService.parse_nodes(
+        typed_nodes = self.tree_svc.parse_nodes(
             doc.document_content_tree["nodes"]
         )
-        patched = DocumentContentTreeService.patch(typed_nodes, updated_map)
+        patched = self.tree_svc.patch(typed_nodes, updated_map)
         doc.document_content_tree["nodes"] = [n.model_dump() for n in patched]
         await self.db.flush()
         return doc

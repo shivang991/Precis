@@ -1,8 +1,11 @@
 import uuid
+from typing import Annotated
 
+from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
+from app.shared.database import get_db
 from app.users.models import User
 from app.documents import DocumentService
 from app.highlights.models import Highlight
@@ -14,7 +17,11 @@ from app.highlights.errors import (
 
 
 class HighlightService:
-    def __init__(self, db: AsyncSession, document_service: DocumentService) -> None:
+    def __init__(
+        self,
+        db: Annotated[AsyncSession, Depends(get_db)],
+        document_service: Annotated[DocumentService, Depends(DocumentService)],
+    ) -> None:
         self.db = db
         self.document_service = document_service
 
