@@ -42,7 +42,6 @@ class DocumentContentTreeService:
         source: str,
         page_count: int,
         author: str | None = None,
-        theme: str = "default",
     ) -> dict:
         """Build the full document content tree JSONB dict for DB storage."""
         return {
@@ -55,7 +54,6 @@ class DocumentContentTreeService:
                 "created_at": datetime.now(timezone.utc).isoformat(),
             },
             "nodes": [n.model_dump() for n in nodes],
-            "theme": theme,
         }
 
     # ── Serialisation boundary ───────────────────────────────────────────────

@@ -73,5 +73,5 @@ async def update_general_settings(
     current_user: User = Depends(get_current_user),
     svc: UserService = Depends(_get_service),
 ):
-    """Update user-level general settings (theme, heading preference)."""
+    """Update user-level general settings."""
     return await svc.update_settings(current_user, body)

@@ -7,8 +7,6 @@ class UserBase(BaseModel):
     email: EmailStr
     name: str
     avatar_url: str | None = None
-    default_theme: str = "default"
-    include_headings_in_summary: bool = True
 
 
 class UserRead(UserBase):
@@ -19,8 +17,7 @@ class UserRead(UserBase):
 
 
 class UserUpdateSettings(BaseModel):
-    default_theme: str | None = None
-    include_headings_in_summary: bool | None = None
+    pass
 
 
 class TokenExchangeRequest(BaseModel):

@@ -57,11 +57,6 @@ def test_build_document_content_tree_structure():
     assert "created_at" in doc["meta"]
 
 
-def test_build_document_content_tree_default_theme():
-    doc = build_document_content_tree(title="T", nodes=[], source="digital", page_count=1)
-    assert doc["theme"] == "default"
-
-
 # ── get_ancestors ─────────────────────────────────────────────────────────────
 
 def _make_doc():

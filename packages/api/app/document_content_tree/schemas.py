@@ -43,4 +43,3 @@ class DocumentContentTree(BaseModel):
     version: str = "1.0"
     meta: DocumentContentTreeMeta
     nodes: list[DocumentContentTreeNode]
-    theme: str = "default"

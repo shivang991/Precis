@@ -16,10 +16,6 @@ class User(Base):
     name: Mapped[str] = mapped_column(String(256))
     avatar_url: Mapped[str | None] = mapped_column(String(1024), nullable=True)
 
-    # General settings (stored as JSON-serializable values on user level)
-    default_theme: Mapped[str] = mapped_column(String(64), default="default")
-    include_headings_in_summary: Mapped[bool] = mapped_column(default=True)
-
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )

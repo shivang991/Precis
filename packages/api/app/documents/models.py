@@ -41,10 +41,6 @@ class Document(Base):
     )
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
 
-    # Document-level settings (overrides user general settings)
-    theme: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    include_headings_in_summary: Mapped[bool | None] = mapped_column(nullable=True)
-
     # The document content tree (see document_content_tree/)
     document_content_tree: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
 

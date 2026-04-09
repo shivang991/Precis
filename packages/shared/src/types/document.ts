@@ -8,8 +8,6 @@ export interface Document {
   title: string;
   source_type: DocumentSourceType;
   status: DocumentStatus;
-  theme?: "default" | "dark" | "sepia";
-  include_headings_in_summary?: boolean;
   document_content_tree?: DocumentContentTree;
   created_at: string;
   updated_at: string;
@@ -17,8 +15,6 @@ export interface Document {
 
 export interface DocumentSettingsUpdate {
   title?: string;
-  theme?: "default" | "dark" | "sepia";
-  include_headings_in_summary?: boolean;
 }
 
 export interface DocumentContentPatch {

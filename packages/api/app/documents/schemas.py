@@ -9,8 +9,6 @@ from app.document_content_tree.schemas import DocumentContentTreeNode, DocumentC
 
 class DocumentBase(BaseModel):
     title: str
-    theme: str | None = None
-    include_headings_in_summary: bool | None = None
 
 
 class DocumentRead(DocumentBase):
@@ -33,8 +31,6 @@ class DocumentReadWithContent(DocumentRead):
 
 class DocumentUpdateSettings(BaseModel):
     title: str | None = None
-    theme: str | None = None
-    include_headings_in_summary: bool | None = None
 
 
 class DocumentUpdateContent(BaseModel):
