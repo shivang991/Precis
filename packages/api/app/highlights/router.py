@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.shared.database import get_db
 from app.shared.dependencies import get_current_user
 from app.users.models import User
+from app.documents import DocumentService
 from app.highlights.schemas import HighlightCreate, HighlightRead
 from app.highlights.service import HighlightService
 
@@ -12,7 +13,7 @@ router = APIRouter(prefix="/documents/{document_id}/highlights", tags=["highligh
 
 
 def _get_service(db: AsyncSession = Depends(get_db)) -> HighlightService:
-    return HighlightService(db)
+    return HighlightService(db, DocumentService(db))
 
 
 @router.get("/", response_model=list[HighlightRead])

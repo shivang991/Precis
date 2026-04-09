@@ -4,33 +4,24 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
 from app.users.models import User
-from app.documents.models import Document
+from app.documents import DocumentService
 from app.highlights.models import Highlight
 from app.highlights.schemas import HighlightCreate
 from app.highlights.errors import (
-    DocumentNotFoundError,
     DocumentNotReadyError,
     HighlightNotFoundError,
 )
 
 
 class HighlightService:
-    def __init__(self, db: AsyncSession) -> None:
+    def __init__(self, db: AsyncSession, document_service: DocumentService) -> None:
         self.db = db
+        self.document_service = document_service
 
-    async def _get_owned_doc(self, document_id: uuid.UUID, user: User) -> Document:
-        result = await self.db.execute(
-            select(Document).where(
-                Document.id == document_id,
-                Document.owner_id == user.id,
-            )
-        )
-        doc = result.scalar_one_or_none()
-        if doc is None:
-            raise DocumentNotFoundError()
+    async def _get_owned_doc(self, document_id: uuid.UUID, user: User) -> None:
+        doc = await self.document_service.get_document(document_id, user)
         if doc.document_content_tree is None:
             raise DocumentNotReadyError()
-        return doc
 
     async def list_highlights(
         self, document_id: uuid.UUID, user: User
