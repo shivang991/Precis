@@ -24,21 +24,21 @@ async def list_highlights(
     return await svc.list_highlights(document_id, current_user)
 
 
-@router.post("/", response_model=HighlightRead, status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=list[HighlightRead], status_code=status.HTTP_201_CREATED)
 async def add_highlight(
     document_id: uuid.UUID,
-    body: HighlightCreate,
+    body: list[HighlightCreate],
     current_user: User = Depends(get_current_user),
     svc: HighlightService = Depends(_get_service),
 ):
-    return await svc.add_highlight(document_id, body, current_user)
+    return await svc.add_highlights(document_id, body, current_user)
 
 
-@router.delete("/{highlight_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def remove_highlight(
+@router.delete("/", status_code=status.HTTP_204_NO_CONTENT)
+async def remove_highlights(
     document_id: uuid.UUID,
-    highlight_id: uuid.UUID,
+    highlight_ids: list[uuid.UUID],
     current_user: User = Depends(get_current_user),
     svc: HighlightService = Depends(_get_service),
 ):
-    await svc.remove_highlight(document_id, highlight_id, current_user)
+    await svc.remove_highlights(document_id, highlight_ids, current_user)
