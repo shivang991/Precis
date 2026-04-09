@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from pydantic import BaseModel
 from app.documents.models import DocumentStatus, DocumentSource
-from app.document_content_tree.schemas import StandardFormatNode, StandardFormat
+from app.document_content_tree.schemas import DocumentContentTreeNode, DocumentContentTree
 
 
 # ── Document CRUD schemas ─────────────────────────────────────────────────────
@@ -28,7 +28,7 @@ class DocumentRead(DocumentBase):
 
 
 class DocumentReadWithContent(DocumentRead):
-    standard_format: StandardFormat | None = None
+    document_content_tree: DocumentContentTree | None = None
 
 
 class DocumentUpdateSettings(BaseModel):
@@ -39,4 +39,4 @@ class DocumentUpdateSettings(BaseModel):
 
 class DocumentUpdateContent(BaseModel):
     """Used by the WYSIWYG editor to patch individual nodes."""
-    nodes: list[StandardFormatNode]
+    nodes: list[DocumentContentTreeNode]

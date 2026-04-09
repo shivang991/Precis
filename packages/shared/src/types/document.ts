@@ -1,4 +1,4 @@
-import type { StandardFormat } from "./standard-format";
+import type { DocumentContentTree } from "./document-content-tree";
 
 export type DocumentStatus = "PENDING" | "PROCESSING" | "READY" | "FAILED";
 export type DocumentSourceType = "DIGITAL" | "SCANNED";
@@ -10,7 +10,7 @@ export interface Document {
   status: DocumentStatus;
   theme?: "default" | "dark" | "sepia";
   include_headings_in_summary?: boolean;
-  standard_format?: StandardFormat;
+  document_content_tree?: DocumentContentTree;
   created_at: string;
   updated_at: string;
 }

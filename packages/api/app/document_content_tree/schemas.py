@@ -2,9 +2,9 @@ from datetime import datetime
 from pydantic import BaseModel
 
 
-class StandardFormatNode(BaseModel):
+class DocumentContentTreeNode(BaseModel):
     """
-    A single node in the Standard Format tree.
+    A single node in the Document Content Tree.
 
     type values:
       heading   – section heading (level 1–6)
@@ -20,14 +20,14 @@ class StandardFormatNode(BaseModel):
     text: str | None = None        # Plain-text content of the node
     content: dict | None = None    # Rich content (tables, image metadata, etc.)
     page: int | None = None        # Source page number in the original PDF
-    children: list["StandardFormatNode"] = []
+    children: list["DocumentContentTreeNode"] = []
 
     model_config = {"from_attributes": True}
 
-StandardFormatNode.model_rebuild()
+DocumentContentTreeNode.model_rebuild()
 
 
-class StandardFormatMeta(BaseModel):
+class DocumentContentTreeMeta(BaseModel):
     title: str
     author: str | None = None
     page_count: int
@@ -35,12 +35,12 @@ class StandardFormatMeta(BaseModel):
     created_at: datetime
 
 
-class StandardFormat(BaseModel):
+class DocumentContentTree(BaseModel):
     """
-    The full Standard Format document — stored as JSONB in the DB.
+    The full Document Content Tree — stored as JSONB in the DB.
     This is the internal representation every view and export is derived from.
     """
     version: str = "1.0"
-    meta: StandardFormatMeta
-    nodes: list[StandardFormatNode]
+    meta: DocumentContentTreeMeta
+    nodes: list[DocumentContentTreeNode]
     theme: str = "default"

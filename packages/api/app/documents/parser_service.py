@@ -6,14 +6,14 @@ import pytesseract
 from PIL import Image
 from pdf2image import convert_from_bytes
 
-from app.document_content_tree.schemas import StandardFormatNode
+from app.document_content_tree.schemas import DocumentContentTreeNode
 from app.document_content_tree.service import DocumentContentTreeService
 from app.shared.config import get_settings
 
 
 @dataclass(frozen=True)
 class ParsedPDF:
-    nodes: list[StandardFormatNode]
+    nodes: list[DocumentContentTreeNode]
     page_count: int
 
 
@@ -41,7 +41,7 @@ class ParserService:
     # –– Digital PDFs –––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––
 
     def parse_digital_pdf(self, pdf_bytes: bytes) -> ParsedPDF:
-        nodes: list[StandardFormatNode] = []
+        nodes: list[DocumentContentTreeNode] = []
 
         with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
             page_count = len(pdf.pages)
@@ -96,7 +96,7 @@ class ParserService:
         lang = get_settings().ocr_language
         images: list[Image.Image] = convert_from_bytes(pdf_bytes, dpi=self.ocr_dpi)
         page_count = len(images)
-        flat_nodes: list[StandardFormatNode] = []
+        flat_nodes: list[DocumentContentTreeNode] = []
 
         for page_num, image in enumerate(images, start=1):
             data = pytesseract.image_to_data(
@@ -122,7 +122,7 @@ class ParserService:
         text: str,
         height: int,
         page: int,
-    ) -> StandardFormatNode:
+    ) -> DocumentContentTreeNode:
         for threshold, level in self.ocr_heading_height_map:
             if height >= threshold:
                 return DocumentContentTreeService.make_node("heading", text=text, level=level, page=page)

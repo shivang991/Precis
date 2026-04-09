@@ -72,7 +72,7 @@ export default function DocumentViewerScreen() {
     );
   }
 
-  const nodes = document.standard_format?.nodes ?? [];
+  const nodes = document.document_content_tree?.nodes ?? [];
 
   return (
     <View style={styles.container}>

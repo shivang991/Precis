@@ -1,9 +1,9 @@
-"""Unit tests for app/services/standard_format.py — no DB or network required."""
+"""Unit tests for document_content_tree — no DB or network required."""
 
 import pytest
 from app.services.standard_format import (
     make_node,
-    build_standard_format,
+    build_document_content_tree,
     get_ancestors,
     build_summary_sections,
 )
@@ -37,11 +37,11 @@ def test_make_node_unique_ids():
     assert a["id"] != b["id"]
 
 
-# ── build_standard_format ─────────────────────────────────────────────────────
+# ── build_document_content_tree ─────────────────────────────────────────────────────
 
-def test_build_standard_format_structure():
+def test_build_document_content_tree_structure():
     node = make_node("paragraph", text="Body")
-    doc = build_standard_format(
+    doc = build_document_content_tree(
         title="Test Doc",
         nodes=[node],
         source="digital",
@@ -57,8 +57,8 @@ def test_build_standard_format_structure():
     assert "created_at" in doc["meta"]
 
 
-def test_build_standard_format_default_theme():
-    doc = build_standard_format(title="T", nodes=[], source="digital", page_count=1)
+def test_build_document_content_tree_default_theme():
+    doc = build_document_content_tree(title="T", nodes=[], source="digital", page_count=1)
     assert doc["theme"] == "default"
 
 
@@ -80,7 +80,7 @@ def _make_doc():
     p2["id"] = "p2"
     h1 = make_node("heading", text="Chapter", level=1, children=[h2, p2])
     h1["id"] = "h1"
-    return build_standard_format(title="Doc", nodes=[h1], source="digital", page_count=1)
+    return build_document_content_tree(title="Doc", nodes=[h1], source="digital", page_count=1)
 
 
 def test_get_ancestors_returns_heading_chain():

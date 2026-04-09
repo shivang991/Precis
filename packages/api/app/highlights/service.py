@@ -28,7 +28,7 @@ class HighlightService:
         doc = result.scalar_one_or_none()
         if doc is None:
             raise DocumentNotFoundError()
-        if doc.standard_format is None:
+        if doc.document_content_tree is None:
             raise DocumentNotReadyError()
         return doc
 

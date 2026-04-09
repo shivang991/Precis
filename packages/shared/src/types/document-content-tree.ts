@@ -58,7 +58,7 @@ export type DocumentNode =
   | ImageNode
   | CodeNode;
 
-export interface StandardFormat {
+export interface DocumentContentTree {
   title: string;
   author?: string;
   page_count?: number;

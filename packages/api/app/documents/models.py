@@ -45,8 +45,8 @@ class Document(Base):
     theme: Mapped[str | None] = mapped_column(String(64), nullable=True)
     include_headings_in_summary: Mapped[bool | None] = mapped_column(nullable=True)
 
-    # The Standard Format document tree (see document_content_tree/)
-    standard_format: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    # The document content tree (see document_content_tree/)
+    document_content_tree: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
 
     page_count: Mapped[int | None] = mapped_column(nullable=True)
 

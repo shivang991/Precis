@@ -39,7 +39,7 @@ class DocumentService:
             raise DocumentNotFoundError()
         return doc
 
-    async def standard_format_generator(
+    async def document_content_tree_generator(
         self, document_id: uuid.UUID, user: User
     ) -> AsyncIterator[str]:
         doc = await self._get_owned_doc(document_id, user)
@@ -57,7 +57,7 @@ class DocumentService:
                 else self.parser.parse_scanned_pdf(pdf_bytes)
             )
 
-            doc.standard_format = DocumentContentTreeService.build_document(
+            doc.document_content_tree = DocumentContentTreeService.build_document(
                 title=doc.title,
                 nodes=parsedPdf.nodes,
                 source=doc.source.value,
@@ -135,15 +135,15 @@ class DocumentService:
         user: User,
     ) -> Document:
         doc = await self._get_owned_doc(document_id, user)
-        if doc.standard_format is None:
+        if doc.document_content_tree is None:
             raise DocumentNotProcessedError()
 
         updated_map = {n.id: n.model_dump() for n in body.nodes}
         typed_nodes = DocumentContentTreeService.parse_nodes(
-            doc.standard_format["nodes"]
+            doc.document_content_tree["nodes"]
         )
         patched = DocumentContentTreeService.patch(typed_nodes, updated_map)
-        doc.standard_format["nodes"] = [n.model_dump() for n in patched]
+        doc.document_content_tree["nodes"] = [n.model_dump() for n in patched]
         await self.db.flush()
         return doc
 
