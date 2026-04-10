@@ -5,11 +5,13 @@ from jose import JWTError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
-from .security import decode_access_token
+from app.users.auth_service import AuthService
 from .database import get_db
 from app.users.models import User
 
 bearer_scheme = HTTPBearer()
+
+_auth_service = AuthService()
 
 
 async def get_current_user(
@@ -22,7 +24,7 @@ async def get_current_user(
         headers={"WWW-Authenticate": "Bearer"},
     )
     try:
-        user_id: uuid.UUID = decode_access_token(credentials.credentials)
+        user_id: uuid.UUID = _auth_service.decode_access_token(credentials.credentials)
     except JWTError:
         raise credentials_exception
 

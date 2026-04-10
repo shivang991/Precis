@@ -1,17 +1,18 @@
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.shared import get_db, get_current_user
+from app.shared import get_current_user
 from .models import User
-from .schemas import UserRead, UserUpdateSettings, TokenExchangeRequest, GoogleAuthUrl, TokenResponse
-from .service import UserService
+from .schemas import (
+    UserRead,
+    UserUpdateSettings,
+    TokenExchangeRequest,
+    GoogleAuthUrl,
+    TokenResponse,
+)
+from .user_service import UserService
 
 auth_router = APIRouter(prefix="/auth", tags=["auth"])
 users_router = APIRouter(prefix="/users", tags=["users"])
-
-
-def _get_service(db: AsyncSession = Depends(get_db)) -> UserService:
-    return UserService(db)
 
 
 # ── Auth routes ───────────────────────────────────────────────────────────────
@@ -23,7 +24,7 @@ async def google_login(
         default=None,
         description="Override redirect URI — pass the mobile deep link (e.g. precis://auth) for app-based OAuth.",
     ),
-    svc: UserService = Depends(_get_service),
+    svc: UserService = Depends(UserService),
 ):
     """Return the Google OAuth redirect URL for the client to navigate to."""
     return svc.get_google_auth_url(redirect_uri)
@@ -33,7 +34,7 @@ async def google_login(
 async def google_callback(
     code: str = Query(...),
     redirect_uri: str | None = Query(default=None),
-    svc: UserService = Depends(_get_service),
+    svc: UserService = Depends(UserService),
 ):
     """Exchange Google auth code for a Precis JWT (web callback)."""
     return await svc.login_with_google(code, redirect_uri)
@@ -42,7 +43,7 @@ async def google_callback(
 @auth_router.post("/token", response_model=TokenResponse)
 async def exchange_token(
     body: TokenExchangeRequest,
-    svc: UserService = Depends(_get_service),
+    svc: UserService = Depends(UserService),
 ):
     """
     Exchange a Google OAuth code for a Precis JWT (mobile / POST flow).
@@ -70,7 +71,7 @@ async def get_me(current_user: User = Depends(get_current_user)):
 async def update_general_settings(
     body: UserUpdateSettings,
     current_user: User = Depends(get_current_user),
-    svc: UserService = Depends(_get_service),
+    svc: UserService = Depends(UserService),
 ):
     """Update user-level general settings."""
     return await svc.update_settings(current_user, body)

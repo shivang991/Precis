@@ -6,7 +6,7 @@ from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
-from app.shared import storage, get_settings, get_db
+from app.shared import StorageService, get_settings, get_db
 from app.document_content_tree import DocumentContentTreeService
 from app.users import User
 from .models import Document, DocumentStatus, DocumentSource
@@ -28,10 +28,12 @@ class DocumentService:
         db: Annotated[AsyncSession, Depends(get_db)],
         parser: Annotated[ParserService, Depends(ParserService)],
         tree_svc: Annotated[DocumentContentTreeService, Depends(DocumentContentTreeService)],
+        storage: Annotated[StorageService, Depends(StorageService)],
     ) -> None:
         self.db = db
         self.parser = parser
         self.tree_svc = tree_svc
+        self.storage = storage
 
     async def _get_owned_doc(self, document_id: uuid.UUID, user: User) -> Document:
         result = await self.db.execute(
@@ -55,7 +57,7 @@ class DocumentService:
             await self.db.flush()
             yield "started"
 
-            pdf_bytes = await storage.download_file(doc.storage_key)
+            pdf_bytes = await self.storage.download_file(doc.storage_key)
 
             parsedPdf = (
                 self.parser.parse_digital_pdf(pdf_bytes)
@@ -104,7 +106,7 @@ class DocumentService:
         if len(file_bytes) > max_bytes:
             raise FileTooLargeError()
 
-        storage_key = await storage.upload_file(file_bytes)
+        storage_key = await self.storage.upload_file(file_bytes)
 
         doc = Document(
             owner_id=user.id,
@@ -155,5 +157,5 @@ class DocumentService:
 
     async def delete_document(self, document_id: uuid.UUID, user: User) -> None:
         doc = await self._get_owned_doc(document_id, user)
-        await storage.delete_file(doc.storage_key)
+        await self.storage.delete_file(doc.storage_key)
         await self.db.delete(doc)

@@ -7,50 +7,49 @@ import uuid
 import aioboto3
 from .config import get_settings
 
-settings = get_settings()
 
-_session = aioboto3.Session(
-    aws_access_key_id=settings.aws_access_key_id or None,
-    aws_secret_access_key=settings.aws_secret_access_key or None,
-    region_name=settings.storage_region,
-)
-
-
-def _client():
-    kwargs = {"service_name": "s3"}
-    if settings.storage_endpoint_url:
-        kwargs["endpoint_url"] = settings.storage_endpoint_url
-    return _session.client(**kwargs)
-
-
-async def upload_file(file_bytes: bytes, content_type: str = "application/pdf") -> str:
-    """Upload bytes to storage and return the storage key."""
-    key = f"uploads/{uuid.uuid4()}.pdf"
-    async with _client() as s3:
-        await s3.put_object(
-            Bucket=settings.storage_bucket,
-            Key=key,
-            Body=file_bytes,
-            ContentType=content_type,
+class StorageService:
+    def __init__(self) -> None:
+        settings = get_settings()
+        self._session = aioboto3.Session(
+            aws_access_key_id=settings.aws_access_key_id or None,
+            aws_secret_access_key=settings.aws_secret_access_key or None,
+            region_name=settings.storage_region,
         )
-    return key
+        self._bucket = settings.storage_bucket
+        self._endpoint_url = settings.storage_endpoint_url
 
+    def _client(self):
+        kwargs = {"service_name": "s3"}
+        if self._endpoint_url:
+            kwargs["endpoint_url"] = self._endpoint_url
+        return self._session.client(**kwargs)
 
-async def download_file(storage_key: str) -> bytes:
-    async with _client() as s3:
-        response = await s3.get_object(Bucket=settings.storage_bucket, Key=storage_key)
-        return await response["Body"].read()
+    async def upload_file(self, file_bytes: bytes, content_type: str = "application/pdf") -> str:
+        """Upload bytes to storage and return the storage key."""
+        key = f"uploads/{uuid.uuid4()}.pdf"
+        async with self._client() as s3:
+            await s3.put_object(
+                Bucket=self._bucket,
+                Key=key,
+                Body=file_bytes,
+                ContentType=content_type,
+            )
+        return key
 
+    async def download_file(self, storage_key: str) -> bytes:
+        async with self._client() as s3:
+            response = await s3.get_object(Bucket=self._bucket, Key=storage_key)
+            return await response["Body"].read()
 
-async def delete_file(storage_key: str) -> None:
-    async with _client() as s3:
-        await s3.delete_object(Bucket=settings.storage_bucket, Key=storage_key)
+    async def delete_file(self, storage_key: str) -> None:
+        async with self._client() as s3:
+            await s3.delete_object(Bucket=self._bucket, Key=storage_key)
 
-
-async def get_presigned_url(storage_key: str, expires_in: int = 3600) -> str:
-    async with _client() as s3:
-        return await s3.generate_presigned_url(
-            "get_object",
-            Params={"Bucket": settings.storage_bucket, "Key": storage_key},
-            ExpiresIn=expires_in,
-        )
+    async def get_presigned_url(self, storage_key: str, expires_in: int = 3600) -> str:
+        async with self._client() as s3:
+            return await s3.generate_presigned_url(
+                "get_object",
+                Params={"Bucket": self._bucket, "Key": storage_key},
+                ExpiresIn=expires_in,
+            )

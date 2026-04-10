@@ -31,7 +31,8 @@ from app.document_content_tree import DocumentContentTreeService
 The following fully-qualified submodule imports are intentional and must not be changed:
 
 - `models.py` files importing `from app.shared.database import Base`
-- `errors.py` files importing `from app.shared.exceptions import DomainError`
+- `errors.py` files importing `from app.shared.domain_error import DomainError`
 - `shared/dependencies.py` importing `from app.users.models import User`
+- `shared/dependencies.py` importing `from app.users.auth_service import AuthService`
 
-The first two bypass `shared/__init__.py` to avoid triggering its full import chain during model registration. The third is required because `shared/dependencies.py` is loaded eagerly by `shared/__init__.py` — if it imported through `app.users` (the boundary), it would trigger `users/__init__.py` → `users/router.py` → `from app.shared import ...` before `shared/__init__.py` has finished initializing.
+The first two bypass `shared/__init__.py` to avoid triggering its full import chain during model registration. The last two are required because `shared/dependencies.py` is loaded eagerly by `shared/__init__.py` — if it imported through `app.users` (the boundary), it would trigger `users/__init__.py` → `users/router.py` → `from app.shared import ...` before `shared/__init__.py` has finished initializing.

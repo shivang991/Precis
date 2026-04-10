@@ -3,12 +3,15 @@ Google OAuth 2.0 flow + JWT issuance + user operations.
 """
 
 import secrets
+from typing import Annotated
 
 import httpx
+from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
-from app.shared import get_settings, create_access_token
+from app.shared import get_settings, get_db
+from .auth_service import AuthService
 from .models import User
 from .schemas import UserUpdateSettings, GoogleAuthUrl, TokenResponse
 from .errors import GoogleAuthError
@@ -20,8 +23,13 @@ GOOGLE_USERINFO_URL = "https://www.googleapis.com/oauth2/v3/userinfo"
 
 
 class UserService:
-    def __init__(self, db: AsyncSession) -> None:
+    def __init__(
+        self,
+        db: Annotated[AsyncSession, Depends(get_db)],
+        auth: Annotated[AuthService, Depends(AuthService)],
+    ) -> None:
         self.db = db
+        self.auth = auth
 
     def get_google_auth_url(self, redirect_uri: str | None = None) -> GoogleAuthUrl:
         state = secrets.token_urlsafe(16)
@@ -43,7 +51,7 @@ class UserService:
         except Exception:
             raise GoogleAuthError()
         user = await self._get_or_create_user(google_info)
-        return TokenResponse(access_token=create_access_token(user.id))
+        return TokenResponse(access_token=self.auth.create_access_token(user.id))
 
     async def update_settings(self, user: User, body: UserUpdateSettings) -> User:
         for field, value in body.model_dump(exclude_none=True).items():

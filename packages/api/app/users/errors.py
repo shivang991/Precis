@@ -1,4 +1,4 @@
-from app.shared.exceptions import DomainError
+from app.shared.domain_error import DomainError
 
 
 class GoogleAuthError(DomainError):
