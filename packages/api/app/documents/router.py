@@ -8,7 +8,7 @@ from fastapi import (
     status,
 )
 from fastapi.responses import StreamingResponse
-from app.shared import get_current_user
+from app.users import get_current_user
 from app.users import User
 from .models import DocumentSource
 from .schemas import (

@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, Query
 
-from app.shared import get_current_user
+from .dependencies import get_current_user
 from .models import User
 from .schemas import (
     UserRead,
@@ -9,7 +9,7 @@ from .schemas import (
     GoogleAuthUrl,
     TokenResponse,
 )
-from .user_service import UserService
+from .service import UserService
 
 auth_router = APIRouter(prefix="/auth", tags=["auth"])
 users_router = APIRouter(prefix="/users", tags=["users"])

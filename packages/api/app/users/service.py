@@ -3,15 +3,17 @@ Google OAuth 2.0 flow + JWT issuance + user operations.
 """
 
 import secrets
+import uuid
+from datetime import datetime, timedelta, timezone
 from typing import Annotated
 
 import httpx
 from fastapi import Depends
+from jose import jwt
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
 from app.shared import get_settings, get_db
-from .auth_service import AuthService
 from .models import User
 from .schemas import UserUpdateSettings, GoogleAuthUrl, TokenResponse
 from .errors import GoogleAuthError
@@ -26,10 +28,8 @@ class UserService:
     def __init__(
         self,
         db: Annotated[AsyncSession, Depends(get_db)],
-        auth: Annotated[AuthService, Depends(AuthService)],
     ) -> None:
         self.db = db
-        self.auth = auth
 
     def get_google_auth_url(self, redirect_uri: str | None = None) -> GoogleAuthUrl:
         state = secrets.token_urlsafe(16)
@@ -51,7 +51,7 @@ class UserService:
         except Exception:
             raise GoogleAuthError()
         user = await self._get_or_create_user(google_info)
-        return TokenResponse(access_token=self.auth.create_access_token(user.id))
+        return TokenResponse(access_token=self._create_access_token(user.id))
 
     async def update_settings(self, user: User, body: UserUpdateSettings) -> User:
         for field, value in body.model_dump(exclude_none=True).items():
@@ -60,6 +60,11 @@ class UserService:
         return user
 
     # ── Private helpers ──────────────────────────────────────────────────────
+
+    def _create_access_token(self, user_id: uuid.UUID) -> str:
+        expire = datetime.now(timezone.utc) + timedelta(minutes=settings.jwt_access_token_expire_minutes)
+        payload = {"sub": str(user_id), "exp": expire}
+        return jwt.encode(payload, settings.jwt_secret_key, algorithm=settings.jwt_algorithm)
 
     async def _exchange_code_for_user_info(self, code: str, redirect_uri: str | None = None) -> dict:
         async with httpx.AsyncClient() as client:

@@ -1,17 +1,17 @@
 import uuid
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from jose import JWTError
+from jose import JWTError, jwt
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
-from app.users.auth_service import AuthService
-from .database import get_db
-from app.users.models import User
+from app.shared.config import get_settings
+from app.shared.database import get_db
+from .models import User
 
 bearer_scheme = HTTPBearer()
 
-_auth_service = AuthService()
+_settings = get_settings()
 
 
 async def get_current_user(
@@ -24,7 +24,15 @@ async def get_current_user(
         headers={"WWW-Authenticate": "Bearer"},
     )
     try:
-        user_id: uuid.UUID = _auth_service.decode_access_token(credentials.credentials)
+        payload = jwt.decode(
+            credentials.credentials,
+            _settings.jwt_secret_key,
+            algorithms=[_settings.jwt_algorithm],
+        )
+        user_id_str: str = payload.get("sub")
+        if user_id_str is None:
+            raise credentials_exception
+        user_id = uuid.UUID(user_id_str)
     except JWTError:
         raise credentials_exception
 

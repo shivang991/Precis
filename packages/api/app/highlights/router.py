@@ -1,7 +1,7 @@
 import uuid
 from fastapi import APIRouter, Depends, status
 
-from app.shared import get_current_user
+from app.users import get_current_user
 from app.users import User
 from .schemas import HighlightCreate, HighlightRead
 from .service import HighlightService
