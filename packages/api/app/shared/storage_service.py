@@ -7,10 +7,11 @@ import uuid
 import aioboto3
 from .config import get_settings
 
+settings = get_settings()
+
 
 class StorageService:
     def __init__(self) -> None:
-        settings = get_settings()
         self._session = aioboto3.Session(
             aws_access_key_id=settings.aws_access_key_id or None,
             aws_secret_access_key=settings.aws_secret_access_key or None,

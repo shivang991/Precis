@@ -11,6 +11,8 @@ from pdf2image import convert_from_bytes
 from app.document_content_tree import DocumentContentTreeNode, DocumentContentTreeService
 from app.shared import get_settings
 
+settings = get_settings()
+
 
 @dataclass(frozen=True)
 class ParsedPDF:
@@ -41,6 +43,7 @@ class ParserService:
         (42, 2),
         (32, 3),
     ]
+    ocr_lang = settings.ocr_language
 
     # –– Digital PDFs –––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––
 
@@ -138,7 +141,6 @@ class ParserService:
     # –– Scanned PDFs –––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––
 
     def parse_scanned_pdf(self, pdf_bytes: bytes) -> ParsedPDF:
-        lang = get_settings().ocr_language
         images: list[Image.Image] = convert_from_bytes(pdf_bytes, dpi=self.ocr_dpi)
         page_count = len(images)
         nodes: list[DocumentContentTreeNode] = []
@@ -146,7 +148,7 @@ class ParserService:
         for page_num, image in enumerate(images, start=1):
             data = pytesseract.image_to_data(
                 image,
-                lang=lang,
+                lang=self.ocr_lang,
                 output_type=pytesseract.Output.DICT,
             )
 
