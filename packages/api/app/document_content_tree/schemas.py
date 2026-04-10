@@ -1,21 +1,21 @@
 from datetime import datetime
+from enum import StrEnum
 from pydantic import BaseModel
 
 
-class DocumentContentTreeNode(BaseModel):
-    """
-    A single node in the Document Content Tree.
+class NodeType(StrEnum):
+    heading   = "heading"    # section heading (level 1–6)
+    paragraph = "paragraph"  # body text
+    list_item = "list_item"  # bullet / numbered list item
+    table     = "table"      # table block (cells stored as nested rows/cols in `content`)
+    image     = "image"      # image block (storage key in `src`)
+    code      = "code"       # code block
 
-    type values:
-      heading   – section heading (level 1–6)
-      paragraph – body text
-      list_item – bullet / numbered list item
-      table     – table block (cells stored as nested rows/cols in `content`)
-      image     – image block (storage key in `src`)
-      code      – code block
-    """
+
+class DocumentContentTreeNode(BaseModel):
+    """A single node in the Document Content Tree."""
     id: str                        # UUID string, stable across edits
-    type: str                      # heading | paragraph | list_item | table | image | code
+    type: NodeType
     level: int | None = None       # Only for heading nodes (1–6)
     text: str | None = None        # Plain-text content of the node
     content: dict | None = None    # Rich content (tables, image metadata, etc.)

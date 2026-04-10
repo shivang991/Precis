@@ -8,7 +8,7 @@ from fastapi import Depends
 from PIL import Image
 from pdf2image import convert_from_bytes
 
-from app.document_content_tree import DocumentContentTreeNode, DocumentContentTreeService
+from app.document_content_tree import DocumentContentTreeNode, DocumentContentTreeService, NodeType
 from app.shared import get_settings
 
 settings = get_settings()
@@ -127,7 +127,7 @@ class ParserService:
                 for table in page.extract_tables():
                     if table:
                         nodes.append(
-                            self.tree_svc.make_node("table", page=page_num, content={"rows": table})
+                            self.tree_svc.make_node(NodeType.table, page=page_num, content={"rows": table})
                         )
 
         return ParsedPDF(nodes=nodes, page_count=page_count)
@@ -176,13 +176,13 @@ class ParserService:
                 )
 
                 heading_level = self._ocr_height_to_heading_level(height)
-                node_type = "heading" if heading_level else "paragraph"
+                node_type = NodeType.heading if heading_level else NodeType.paragraph
 
                 can_merge = False
                 if nodes and not has_paragraph_break:
                     last = nodes[-1]
                     if last.type == node_type and last.page == page_num:
-                        if node_type == "paragraph":
+                        if node_type == NodeType.paragraph:
                             can_merge = True
                         elif last.level == heading_level:
                             can_merge = True
@@ -211,6 +211,6 @@ class ParserService:
     ) -> DocumentContentTreeNode:
         level = self._ocr_height_to_heading_level(height)
         if level:
-            return self.tree_svc.make_node("heading", text=text, level=level, page=page)
-        return self.tree_svc.make_node("paragraph", text=text, page=page)
+            return self.tree_svc.make_node(NodeType.heading, text=text, level=level, page=page)
+        return self.tree_svc.make_node(NodeType.paragraph, text=text, page=page)
 

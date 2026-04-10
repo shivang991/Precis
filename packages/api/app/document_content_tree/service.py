@@ -6,7 +6,7 @@ the document content tree live here.
 import uuid
 from datetime import datetime, timezone
 
-from .schemas import DocumentContentTreeNode
+from .schemas import DocumentContentTreeNode, NodeType
 
 
 class DocumentContentTreeService:
@@ -15,7 +15,7 @@ class DocumentContentTreeService:
 
     def make_node(
         self,
-        node_type: str,
+        node_type: NodeType,
         text: str | None = None,
         level: int | None = None,
         content: dict | None = None,
@@ -84,7 +84,7 @@ class DocumentContentTreeService:
         root: list[DocumentContentTreeNode] = []
         stack: list[tuple[int, DocumentContentTreeNode | dict]] = [(0, {"children": root})]
         for node in flat_nodes:
-            level = node.level if node.type == "heading" else 999
+            level = node.level if node.type == NodeType.heading else 999
             while len(stack) > 1 and stack[-1][0] >= level:
                 stack.pop()
             parent = stack[-1][1]
@@ -92,7 +92,7 @@ class DocumentContentTreeService:
                 parent["children"].append(node)
             else:
                 parent.children.append(node)
-            if node.type == "heading":
+            if node.type == NodeType.heading:
                 stack.append((level, node))
         return root
 
@@ -137,7 +137,7 @@ class DocumentContentTreeService:
         current = parent_map.get(node_id)
         while current is not None:
             node = id_to_node.get(current)
-            if node and node.type == "heading":
+            if node and node.type == NodeType.heading:
                 chain.append(current)
             current = parent_map.get(current)
 
