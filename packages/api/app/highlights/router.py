@@ -1,10 +1,10 @@
 import uuid
 from fastapi import APIRouter, Depends, status
 
-from app.shared.dependencies import get_current_user
-from app.users.models import User
-from app.highlights.schemas import HighlightCreate, HighlightRead
-from app.highlights.service import HighlightService
+from app.shared import get_current_user
+from app.users import User
+from .schemas import HighlightCreate, HighlightRead
+from .service import HighlightService
 
 router = APIRouter(prefix="/documents/{document_id}/highlights", tags=["highlights"])
 

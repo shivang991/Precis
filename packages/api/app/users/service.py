@@ -8,11 +8,10 @@ import httpx
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
-from app.shared.config import get_settings
-from app.shared.security import create_access_token
-from app.users.models import User
-from app.users.schemas import UserUpdateSettings, GoogleAuthUrl, TokenResponse
-from app.users.errors import GoogleAuthError
+from app.shared import get_settings, create_access_token
+from .models import User
+from .schemas import UserUpdateSettings, GoogleAuthUrl, TokenResponse
+from .errors import GoogleAuthError
 
 settings = get_settings()
 

@@ -6,15 +6,13 @@ from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
-from app.shared import storage
-from app.document_content_tree.service import DocumentContentTreeService
-from app.shared.config import get_settings
-from app.shared.database import get_db
-from app.users.models import User
-from app.documents.models import Document, DocumentStatus, DocumentSource
-from app.documents.schemas import DocumentUpdateSettings, DocumentUpdateContent
-from app.documents.parser_service import ParserService
-from app.documents.errors import (
+from app.shared import storage, get_settings, get_db
+from app.document_content_tree import DocumentContentTreeService
+from app.users import User
+from .models import Document, DocumentStatus, DocumentSource
+from .schemas import DocumentUpdateSettings, DocumentUpdateContent
+from .parser_service import ParserService
+from .errors import (
     DocumentNotFoundError,
     DocumentNotProcessedError,
     InvalidFileTypeError,

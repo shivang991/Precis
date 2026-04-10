@@ -8,16 +8,16 @@ from fastapi import (
     status,
 )
 from fastapi.responses import StreamingResponse
-from app.shared.dependencies import get_current_user
-from app.users.models import User
-from app.documents.models import DocumentSource
-from app.documents.schemas import (
+from app.shared import get_current_user
+from app.users import User
+from .models import DocumentSource
+from .schemas import (
     DocumentRead,
     DocumentReadWithContent,
     DocumentUpdateSettings,
     DocumentUpdateContent,
 )
-from app.documents.document_service import DocumentService
+from .document_service import DocumentService
 
 router = APIRouter(prefix="/documents", tags=["documents"])
 

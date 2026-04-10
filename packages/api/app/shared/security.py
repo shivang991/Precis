@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime, timedelta, timezone
 from jose import JWTError, jwt
-from app.shared.config import get_settings
+from .config import get_settings
 
 settings = get_settings()
 

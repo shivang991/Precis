@@ -6,7 +6,7 @@ the document content tree live here.
 import uuid
 from datetime import datetime, timezone
 
-from app.document_content_tree.schemas import DocumentContentTreeNode
+from .schemas import DocumentContentTreeNode
 
 
 class DocumentContentTreeService:

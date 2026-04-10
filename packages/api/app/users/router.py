@@ -1,11 +1,10 @@
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.shared.database import get_db
-from app.shared.dependencies import get_current_user
-from app.users.models import User
-from app.users.schemas import UserRead, UserUpdateSettings, TokenExchangeRequest, GoogleAuthUrl, TokenResponse
-from app.users.service import UserService
+from app.shared import get_db, get_current_user
+from .models import User
+from .schemas import UserRead, UserUpdateSettings, TokenExchangeRequest, GoogleAuthUrl, TokenResponse
+from .service import UserService
 
 auth_router = APIRouter(prefix="/auth", tags=["auth"])
 users_router = APIRouter(prefix="/users", tags=["users"])

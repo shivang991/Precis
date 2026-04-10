@@ -1,8 +1,8 @@
 import uuid
 from datetime import datetime
 from pydantic import BaseModel
-from app.documents.models import DocumentStatus, DocumentSource
-from app.document_content_tree.schemas import DocumentContentTreeNode, DocumentContentTree
+from .models import DocumentStatus, DocumentSource
+from app.document_content_tree import DocumentContentTreeNode, DocumentContentTree
 
 
 # ── Document CRUD schemas ─────────────────────────────────────────────────────

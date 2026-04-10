@@ -8,9 +8,8 @@ from fastapi import Depends
 from PIL import Image
 from pdf2image import convert_from_bytes
 
-from app.document_content_tree.schemas import DocumentContentTreeNode
-from app.document_content_tree.service import DocumentContentTreeService
-from app.shared.config import get_settings
+from app.document_content_tree import DocumentContentTreeNode, DocumentContentTreeService
+from app.shared import get_settings
 
 
 @dataclass(frozen=True)

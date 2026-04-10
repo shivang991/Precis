@@ -5,12 +5,12 @@ from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
-from app.shared.database import get_db
-from app.users.models import User
+from app.shared import get_db
+from app.users import User
 from app.documents import DocumentService
-from app.highlights.models import Highlight
-from app.highlights.schemas import HighlightCreate
-from app.highlights.errors import (
+from .models import Highlight
+from .schemas import HighlightCreate
+from .errors import (
     DocumentNotReadyError,
     HighlightNotFoundError,
 )
