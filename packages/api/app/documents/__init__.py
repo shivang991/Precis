@@ -1,3 +1,4 @@
 from .document_service import DocumentService
+from .router import router
 
-__all__ = ["DocumentService"]
+__all__ = ["DocumentService", "router"]

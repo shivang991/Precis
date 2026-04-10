@@ -32,5 +32,6 @@ The following fully-qualified submodule imports are intentional and must not be 
 
 - `models.py` files importing `from app.shared.database import Base`
 - `errors.py` files importing `from app.shared.exceptions import DomainError`
+- `shared/dependencies.py` importing `from app.users.models import User`
 
-These bypass `shared/__init__.py` on purpose. Routing them through the `shared` boundary would trigger `shared/dependencies.py` → `app.users` → `users/models.py` → `shared/__init__.py` again, causing a circular import.
+The first two bypass `shared/__init__.py` to avoid triggering its full import chain during model registration. The third is required because `shared/dependencies.py` is loaded eagerly by `shared/__init__.py` — if it imported through `app.users` (the boundary), it would trigger `users/__init__.py` → `users/router.py` → `from app.shared import ...` before `shared/__init__.py` has finished initializing.
