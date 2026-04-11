@@ -71,7 +71,6 @@ class DocumentService:
                 source=doc.source.value,
                 page_count=parsedPdf.page_count,
             )
-            doc.page_count = parsedPdf.page_count
             doc.status = DocumentStatus.READY
             await self.db.commit()
             yield "ready"

@@ -44,8 +44,6 @@ class Document(Base):
     # The document content tree (see document_content_tree/)
     document_content_tree: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
 
-    page_count: Mapped[int | None] = mapped_column(nullable=True)
-
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )

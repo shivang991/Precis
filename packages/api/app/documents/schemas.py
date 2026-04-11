@@ -18,7 +18,6 @@ class DocumentRead(DocumentBase):
     source: DocumentSource
     status: DocumentStatus
     error_message: str | None = None
-    page_count: int | None = None
     created_at: datetime
     updated_at: datetime
 
