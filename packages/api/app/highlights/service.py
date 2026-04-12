@@ -1,10 +1,9 @@
 import uuid
-from fastapi import Depends
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.documents import DocumentService
-from app.shared import get_db
 from app.users import User
 
 from .errors import (
@@ -18,8 +17,8 @@ from .schemas import HighlightCreate
 class HighlightService:
     def __init__(
         self,
-        db: AsyncSession = Depends(get_db),
-        document_service: DocumentService = Depends(DocumentService),
+        db: AsyncSession,
+        document_service: DocumentService,
     ) -> None:
         self.db = db
         self.document_service = document_service

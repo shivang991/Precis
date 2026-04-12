@@ -1,11 +1,11 @@
 import uuid
 from collections.abc import AsyncIterator
-from fastapi import Depends
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.document_content_tree import DocumentContentTreeService
-from app.shared import StorageService, get_db, get_settings
+from app.shared import StorageService, get_settings
 from app.users import User
 
 from .errors import (
@@ -24,14 +24,12 @@ settings = get_settings()
 class DocumentService:
     def __init__(
         self,
-        db: AsyncSession = Depends(get_db),
-        parser: ParserService = Depends(ParserService),
-        tree_svc: DocumentContentTreeService = Depends(DocumentContentTreeService),
-        storage: StorageService = Depends(StorageService),
+        db: AsyncSession,
+        parser: ParserService,
+        storage: StorageService,
     ) -> None:
         self.db = db
         self.parser = parser
-        self.tree_svc = tree_svc
         self.storage = storage
 
     async def _get_owned_doc(self, document_id: uuid.UUID, user: User) -> Document:
@@ -58,17 +56,17 @@ class DocumentService:
 
             pdf_bytes = await self.storage.download_file(doc.storage_key)
 
-            parsedPdf = (
+            parsed_pdf = (
                 self.parser.parse_digital_pdf(pdf_bytes)
                 if doc.source == DocumentSource.DIGITAL
                 else self.parser.parse_scanned_pdf(pdf_bytes)
             )
 
-            doc.document_content_tree = self.tree_svc.build_document(
+            doc.document_content_tree = DocumentContentTreeService.build_document(
                 title=doc.title,
-                nodes=parsedPdf.nodes,
+                nodes=parsed_pdf.nodes,
                 source=doc.source.value,
-                page_count=parsedPdf.page_count,
+                page_count=parsed_pdf.page_count,
             )
             doc.status = DocumentStatus.READY
             await self.db.commit()
@@ -145,8 +143,10 @@ class DocumentService:
             raise DocumentNotProcessedError()
 
         updated_map = {n.id: n.model_dump() for n in body.nodes}
-        typed_nodes = self.tree_svc.parse_nodes(doc.document_content_tree["nodes"])
-        patched = self.tree_svc.patch(typed_nodes, updated_map)
+        typed_nodes = DocumentContentTreeService.parse_nodes(
+            doc.document_content_tree["nodes"]
+        )
+        patched = DocumentContentTreeService.patch(typed_nodes, updated_map)
         doc.document_content_tree["nodes"] = [n.model_dump() for n in patched]
         await self.db.flush()
         return doc

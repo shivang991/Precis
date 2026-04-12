@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, Query
 
-from .dependencies import get_current_user
+from .dependencies import get_current_user, get_user_service
 from .models import User
 from .schemas import (
     GoogleAuthUrl,
@@ -27,7 +27,7 @@ async def google_login(
             " (e.g. precis://auth) for app-based OAuth."
         ),
     ),
-    svc: UserService = Depends(UserService),
+    svc: UserService = Depends(get_user_service),
 ):
     """Return the Google OAuth redirect URL for the client to navigate to."""
     return svc.get_google_auth_url(redirect_uri)
@@ -39,7 +39,7 @@ async def google_login(
 async def google_callback(
     code: str = Query(...),
     redirect_uri: str | None = Query(default=None),
-    svc: UserService = Depends(UserService),
+    svc: UserService = Depends(get_user_service),
 ):
     """Exchange Google auth code for a Precis JWT (web callback)."""
     return await svc.login_with_google(code, redirect_uri)
@@ -48,7 +48,7 @@ async def google_callback(
 @auth_router.post("/token", response_model=TokenResponse, operation_id="exchange_token")
 async def exchange_token(
     body: TokenExchangeRequest,
-    svc: UserService = Depends(UserService),
+    svc: UserService = Depends(get_user_service),
 ):
     """
     Exchange a Google OAuth code for a Precis JWT (mobile / POST flow).
@@ -78,7 +78,7 @@ async def get_me(current_user: User = Depends(get_current_user)):
 async def update_general_settings(
     body: UserUpdateSettings,
     current_user: User = Depends(get_current_user),
-    svc: UserService = Depends(UserService),
+    svc: UserService = Depends(get_user_service),
 ):
     """Update user-level general settings."""
     return await svc.update_settings(current_user, body)

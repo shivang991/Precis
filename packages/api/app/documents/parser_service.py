@@ -3,7 +3,6 @@ from dataclasses import dataclass
 
 import pdfplumber
 import pytesseract
-from fastapi import Depends
 from pdf2image import convert_from_bytes
 
 from app.document_content_tree import (
@@ -23,11 +22,6 @@ class ParsedPDF:
 
 
 class ParserService:
-    def __init__(
-        self,
-        tree_svc: DocumentContentTreeService = Depends(DocumentContentTreeService),
-    ) -> None:
-        self.tree_svc = tree_svc
 
     # ── Configuration ─────────────────────────────────────────────────────────────
 
@@ -96,13 +90,15 @@ class ParserService:
                         heading_level = self._font_size_to_heading_level(
                             word.get("size", 10)
                         )
-                        node_type = "heading" if heading_level else "paragraph"
+                        node_type = (
+                            NodeType.heading if heading_level else NodeType.paragraph
+                        )
 
                         can_merge = False
                         if nodes and not has_double_newline:
                             last = nodes[-1]
                             if last.type == node_type and last.page == page_num:
-                                if node_type == "paragraph":
+                                if node_type == NodeType.paragraph:
                                     can_merge = True
                                 elif last.level == heading_level:
                                     can_merge = True
@@ -111,8 +107,8 @@ class ParserService:
                             nodes[-1].text += " " + text
                         elif heading_level:
                             nodes.append(
-                                self.tree_svc.make_node(
-                                    "heading",
+                                DocumentContentTreeService.make_node(
+                                    NodeType.heading,
                                     text=text,
                                     level=heading_level,
                                     page=page_num,
@@ -120,8 +116,8 @@ class ParserService:
                             )
                         else:
                             nodes.append(
-                                self.tree_svc.make_node(
-                                    "paragraph", text=text, page=page_num
+                                DocumentContentTreeService.make_node(
+                                    NodeType.paragraph, text=text, page=page_num
                                 )
                             )
 
@@ -134,7 +130,7 @@ class ParserService:
                 for table in page.extract_tables():
                     if table:
                         nodes.append(
-                            self.tree_svc.make_node(
+                            DocumentContentTreeService.make_node(
                                 NodeType.table, page=page_num, content={"rows": table}
                             )
                         )
@@ -219,7 +215,9 @@ class ParserService:
     ) -> DocumentContentTreeNode:
         level = self._ocr_height_to_heading_level(height)
         if level:
-            return self.tree_svc.make_node(
+            return DocumentContentTreeService.make_node(
                 NodeType.heading, text=text, level=level, page=page
             )
-        return self.tree_svc.make_node(NodeType.paragraph, text=text, page=page)
+        return DocumentContentTreeService.make_node(
+            NodeType.paragraph, text=text, page=page
+        )

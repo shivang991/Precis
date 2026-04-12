@@ -5,13 +5,13 @@ Google OAuth 2.0 flow + JWT issuance + user operations.
 import secrets
 import uuid
 from datetime import UTC, datetime, timedelta
+
 import httpx
-from fastapi import Depends
 from jose import jwt
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.shared import get_db, get_settings
+from app.shared import get_settings
 
 from .errors import GoogleAuthError
 from .models import User
@@ -24,10 +24,7 @@ GOOGLE_USERINFO_URL = "https://www.googleapis.com/oauth2/v3/userinfo"
 
 
 class UserService:
-    def __init__(
-        self,
-        db: AsyncSession = Depends(get_db),
-    ) -> None:
+    def __init__(self, db: AsyncSession) -> None:
         self.db = db
 
     def get_google_auth_url(self, redirect_uri: str | None = None) -> GoogleAuthUrl:

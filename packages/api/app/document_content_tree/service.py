@@ -12,8 +12,8 @@ from .schemas import DocumentContentTreeNode, NodeType
 class DocumentContentTreeService:
     # ── Node creation ────────────────────────────────────────────────────────
 
+    @staticmethod
     def make_node(
-        self,
         node_type: NodeType,
         text: str | None = None,
         level: int | None = None,
@@ -33,8 +33,8 @@ class DocumentContentTreeService:
 
     # ── Full-document builder ────────────────────────────────────────────────
 
+    @staticmethod
     def build_document(
-        self,
         *,
         title: str,
         nodes: list[DocumentContentTreeNode],
@@ -57,33 +57,37 @@ class DocumentContentTreeService:
 
     # ── Serialisation boundary ───────────────────────────────────────────────
 
-    def parse_nodes(self, raw_nodes: list[dict]) -> list[DocumentContentTreeNode]:
+    @staticmethod
+    def parse_nodes(raw_nodes: list[dict]) -> list[DocumentContentTreeNode]:
         """Parse raw JSONB node dicts into typed DocumentContentTreeNode objects."""
         return [DocumentContentTreeNode.model_validate(n) for n in raw_nodes]
 
     # ── Tree traversal ───────────────────────────────────────────────────────
 
+    @classmethod
     def flatten(
-        self, nodes: list[DocumentContentTreeNode]
+        cls, nodes: list[DocumentContentTreeNode]
     ) -> list[DocumentContentTreeNode]:
         """Depth-first flattening of the node tree."""
         result: list[DocumentContentTreeNode] = []
         for node in nodes:
             result.append(node)
-            result.extend(self.flatten(node.children))
+            result.extend(cls.flatten(node.children))
         return result
 
+    @classmethod
     def build_node_index(
-        self, document_content_tree: dict
+        cls, document_content_tree: dict
     ) -> dict[str, DocumentContentTreeNode]:
         """Build a flat {node_id: node} lookup from the raw JSONB dict."""
-        nodes = self.parse_nodes(document_content_tree.get("nodes", []))
-        return {n.id: n for n in self.flatten(nodes)}
+        nodes = cls.parse_nodes(document_content_tree.get("nodes", []))
+        return {n.id: n for n in cls.flatten(nodes)}
 
     # ── Tree mutation ────────────────────────────────────────────────────────
 
+    @staticmethod
     def nest(
-        self, flat_nodes: list[DocumentContentTreeNode]
+        flat_nodes: list[DocumentContentTreeNode],
     ) -> list[DocumentContentTreeNode]:
         """Nest a flat list of nodes into a tree based on heading levels."""
         root: list[DocumentContentTreeNode] = []
@@ -103,8 +107,9 @@ class DocumentContentTreeService:
                 stack.append((level, node))
         return root
 
+    @classmethod
     def patch(
-        self,
+        cls,
         nodes: list[DocumentContentTreeNode],
         updates: dict[str, dict],
     ) -> list[DocumentContentTreeNode]:
@@ -113,22 +118,23 @@ class DocumentContentTreeService:
         for node in nodes:
             if node.id in updates:
                 patched = node.model_copy(update=updates[node.id])
-                patched.children = self.patch(node.children, updates)
+                patched.children = cls.patch(node.children, updates)
                 result.append(patched)
             else:
-                node.children = self.patch(node.children, updates)
+                node.children = cls.patch(node.children, updates)
                 result.append(node)
         return result
 
     # ── Ancestor resolution ──────────────────────────────────────────────────
 
-    def get_ancestor_ids(self, document_content_tree: dict, node_id: str) -> list[str]:
+    @classmethod
+    def get_ancestor_ids(cls, document_content_tree: dict, node_id: str) -> list[str]:
         """
         Return the IDs of all heading ancestors (root → leaf) for a given node.
         Accepts the raw JSONB document_content_tree dict.
         """
-        nodes = self.parse_nodes(document_content_tree.get("nodes", []))
-        all_nodes = self.flatten(nodes)
+        nodes = cls.parse_nodes(document_content_tree.get("nodes", []))
+        all_nodes = cls.flatten(nodes)
         id_to_node = {n.id: n for n in all_nodes}
 
         parent_map: dict[str, str | None] = {}

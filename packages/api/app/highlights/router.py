@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, status
 
 from app.users import User, get_current_user
 
+from .dependencies import get_highlight_service
 from .schemas import HighlightCreate, HighlightRead
 from .service import HighlightService
 
@@ -14,7 +15,7 @@ router = APIRouter(prefix="/documents/{document_id}/highlights", tags=["highligh
 async def list_highlights(
     document_id: uuid.UUID,
     current_user: User = Depends(get_current_user),
-    svc: HighlightService = Depends(HighlightService),
+    svc: HighlightService = Depends(get_highlight_service),
 ):
     return await svc.list_highlights(document_id, current_user)
 
@@ -29,7 +30,7 @@ async def add_highlight(
     document_id: uuid.UUID,
     body: list[HighlightCreate],
     current_user: User = Depends(get_current_user),
-    svc: HighlightService = Depends(HighlightService),
+    svc: HighlightService = Depends(get_highlight_service),
 ):
     return await svc.add_highlights(document_id, body, current_user)
 
@@ -41,6 +42,6 @@ async def remove_highlights(
     document_id: uuid.UUID,
     highlight_ids: list[uuid.UUID],
     current_user: User = Depends(get_current_user),
-    svc: HighlightService = Depends(HighlightService),
+    svc: HighlightService = Depends(get_highlight_service),
 ):
     await svc.remove_highlights(document_id, highlight_ids, current_user)

@@ -10,6 +10,7 @@ from app.shared.config import get_settings
 from app.shared.database import get_db
 
 from .models import User
+from .service import UserService
 
 bearer_scheme = HTTPBearer()
 
@@ -43,3 +44,9 @@ async def get_current_user(
     if user is None:
         raise credentials_exception
     return user
+
+
+async def get_user_service(
+    db: AsyncSession = Depends(get_db),
+) -> UserService:
+    return UserService(db=db)
