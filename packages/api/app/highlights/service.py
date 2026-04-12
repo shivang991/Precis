@@ -1,6 +1,4 @@
 import uuid
-from typing import Annotated
-
 from fastapi import Depends
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -20,8 +18,8 @@ from .schemas import HighlightCreate
 class HighlightService:
     def __init__(
         self,
-        db: Annotated[AsyncSession, Depends(get_db)],
-        document_service: Annotated[DocumentService, Depends(DocumentService)],
+        db: AsyncSession = Depends(get_db),
+        document_service: DocumentService = Depends(DocumentService),
     ) -> None:
         self.db = db
         self.document_service = document_service

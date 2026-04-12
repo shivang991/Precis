@@ -5,8 +5,6 @@ Google OAuth 2.0 flow + JWT issuance + user operations.
 import secrets
 import uuid
 from datetime import UTC, datetime, timedelta
-from typing import Annotated
-
 import httpx
 from fastapi import Depends
 from jose import jwt
@@ -28,7 +26,7 @@ GOOGLE_USERINFO_URL = "https://www.googleapis.com/oauth2/v3/userinfo"
 class UserService:
     def __init__(
         self,
-        db: Annotated[AsyncSession, Depends(get_db)],
+        db: AsyncSession = Depends(get_db),
     ) -> None:
         self.db = db
 

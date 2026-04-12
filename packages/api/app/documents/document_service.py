@@ -1,7 +1,5 @@
 import uuid
 from collections.abc import AsyncIterator
-from typing import Annotated
-
 from fastapi import Depends
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -26,12 +24,10 @@ settings = get_settings()
 class DocumentService:
     def __init__(
         self,
-        db: Annotated[AsyncSession, Depends(get_db)],
-        parser: Annotated[ParserService, Depends(ParserService)],
-        tree_svc: Annotated[
-            DocumentContentTreeService, Depends(DocumentContentTreeService)
-        ],
-        storage: Annotated[StorageService, Depends(StorageService)],
+        db: AsyncSession = Depends(get_db),
+        parser: ParserService = Depends(ParserService),
+        tree_svc: DocumentContentTreeService = Depends(DocumentContentTreeService),
+        storage: StorageService = Depends(StorageService),
     ) -> None:
         self.db = db
         self.parser = parser

@@ -1,6 +1,5 @@
 import io
 from dataclasses import dataclass
-from typing import Annotated
 
 import pdfplumber
 import pytesseract
@@ -26,9 +25,7 @@ class ParsedPDF:
 class ParserService:
     def __init__(
         self,
-        tree_svc: Annotated[
-            DocumentContentTreeService, Depends(DocumentContentTreeService)
-        ],
+        tree_svc: DocumentContentTreeService = Depends(DocumentContentTreeService),
     ) -> None:
         self.tree_svc = tree_svc
 
