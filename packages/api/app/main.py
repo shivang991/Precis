@@ -55,6 +55,6 @@ app.include_router(documents_router, prefix=_prefix)
 app.include_router(highlights_router, prefix=_prefix)
 
 
-@app.get("/health")
+@app.get("/health", operation_id="health_check")
 async def health():
     return {"status": "ok"}

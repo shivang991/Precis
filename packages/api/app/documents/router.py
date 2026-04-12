@@ -22,7 +22,7 @@ from .document_service import DocumentService
 router = APIRouter(prefix="/documents", tags=["documents"])
 
 
-@router.get("/", response_model=list[DocumentRead])
+@router.get("/", response_model=list[DocumentRead], operation_id="list_documents")
 async def list_documents(
     current_user: User = Depends(get_current_user),
     svc: DocumentService = Depends(DocumentService),
@@ -31,7 +31,7 @@ async def list_documents(
 
 
 @router.post(
-    "/upload", response_model=DocumentRead, status_code=status.HTTP_201_CREATED
+    "/upload", response_model=DocumentRead, status_code=status.HTTP_201_CREATED, operation_id="upload_document",
 )
 async def upload_document(
     file: UploadFile = File(...),
@@ -50,7 +50,7 @@ async def upload_document(
     )
 
 
-@router.post("/{document_id}/process")
+@router.post("/{document_id}/process", operation_id="process_document")
 async def process_document(
     document_id: uuid.UUID,
     current_user: User = Depends(get_current_user),
@@ -62,7 +62,7 @@ async def process_document(
     )
 
 
-@router.get("/{document_id}", response_model=DocumentReadWithContent)
+@router.get("/{document_id}", response_model=DocumentReadWithContent, operation_id="get_document")
 async def get_document(
     document_id: uuid.UUID,
     current_user: User = Depends(get_current_user),
@@ -71,7 +71,7 @@ async def get_document(
     return await svc.get_document(document_id, current_user)
 
 
-@router.patch("/{document_id}/settings", response_model=DocumentRead)
+@router.patch("/{document_id}/settings", response_model=DocumentRead, operation_id="update_document_settings")
 async def update_document_settings(
     document_id: uuid.UUID,
     body: DocumentUpdateSettings,
@@ -81,7 +81,7 @@ async def update_document_settings(
     return await svc.update_document_settings(document_id, body, current_user)
 
 
-@router.patch("/{document_id}/content", response_model=DocumentRead)
+@router.patch("/{document_id}/content", response_model=DocumentRead, operation_id="update_document_content")
 async def update_document_content(
     document_id: uuid.UUID,
     body: DocumentUpdateContent,
@@ -91,7 +91,7 @@ async def update_document_content(
     return await svc.update_document_content(document_id, body, current_user)
 
 
-@router.delete("/{document_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{document_id}", status_code=status.HTTP_204_NO_CONTENT, operation_id="delete_document")
 async def delete_document(
     document_id: uuid.UUID,
     current_user: User = Depends(get_current_user),

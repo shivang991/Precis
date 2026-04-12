@@ -9,7 +9,7 @@ from .service import HighlightService
 router = APIRouter(prefix="/documents/{document_id}/highlights", tags=["highlights"])
 
 
-@router.get("/", response_model=list[HighlightRead])
+@router.get("/", response_model=list[HighlightRead], operation_id="list_highlights")
 async def list_highlights(
     document_id: uuid.UUID,
     current_user: User = Depends(get_current_user),
@@ -18,7 +18,7 @@ async def list_highlights(
     return await svc.list_highlights(document_id, current_user)
 
 
-@router.post("/", response_model=list[HighlightRead], status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=list[HighlightRead], status_code=status.HTTP_201_CREATED, operation_id="add_highlights")
 async def add_highlight(
     document_id: uuid.UUID,
     body: list[HighlightCreate],
@@ -28,7 +28,7 @@ async def add_highlight(
     return await svc.add_highlights(document_id, body, current_user)
 
 
-@router.delete("/", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/", status_code=status.HTTP_204_NO_CONTENT, operation_id="remove_highlights")
 async def remove_highlights(
     document_id: uuid.UUID,
     highlight_ids: list[uuid.UUID],

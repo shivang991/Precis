@@ -18,7 +18,7 @@ users_router = APIRouter(prefix="/users", tags=["users"])
 # ── Auth routes ───────────────────────────────────────────────────────────────
 
 
-@auth_router.get("/login", response_model=GoogleAuthUrl)
+@auth_router.get("/login", response_model=GoogleAuthUrl, operation_id="get_login_url")
 async def google_login(
     redirect_uri: str | None = Query(
         default=None,
@@ -30,7 +30,7 @@ async def google_login(
     return svc.get_google_auth_url(redirect_uri)
 
 
-@auth_router.get("/callback", response_model=TokenResponse)
+@auth_router.get("/callback", response_model=TokenResponse, operation_id="google_callback")
 async def google_callback(
     code: str = Query(...),
     redirect_uri: str | None = Query(default=None),
@@ -40,7 +40,7 @@ async def google_callback(
     return await svc.login_with_google(code, redirect_uri)
 
 
-@auth_router.post("/token", response_model=TokenResponse)
+@auth_router.post("/token", response_model=TokenResponse, operation_id="exchange_token")
 async def exchange_token(
     body: TokenExchangeRequest,
     svc: UserService = Depends(UserService),
@@ -54,7 +54,7 @@ async def exchange_token(
     return await svc.login_with_google(body.code, body.redirect_uri)
 
 
-@auth_router.get("/me", response_model=UserRead)
+@auth_router.get("/me", response_model=UserRead, operation_id="get_auth_me")
 async def me(current_user: User = Depends(get_current_user)):
     return current_user
 
@@ -62,12 +62,12 @@ async def me(current_user: User = Depends(get_current_user)):
 # ── Users routes ──────────────────────────────────────────────────────────────
 
 
-@users_router.get("/me", response_model=UserRead)
+@users_router.get("/me", response_model=UserRead, operation_id="get_profile")
 async def get_me(current_user: User = Depends(get_current_user)):
     return current_user
 
 
-@users_router.patch("/me/settings", response_model=UserRead)
+@users_router.patch("/me/settings", response_model=UserRead, operation_id="update_settings")
 async def update_general_settings(
     body: UserUpdateSettings,
     current_user: User = Depends(get_current_user),
