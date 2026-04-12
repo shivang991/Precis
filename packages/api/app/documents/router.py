@@ -1,23 +1,25 @@
 import uuid
+
 from fastapi import (
     APIRouter,
     Depends,
-    UploadFile,
     File,
     Form,
+    UploadFile,
     status,
 )
 from fastapi.responses import StreamingResponse
-from app.users import get_current_user
-from app.users import User
+
+from app.users import User, get_current_user
+
+from .document_service import DocumentService
 from .models import DocumentSource
 from .schemas import (
     DocumentRead,
     DocumentReadWithContent,
-    DocumentUpdateSettings,
     DocumentUpdateContent,
+    DocumentUpdateSettings,
 )
-from .document_service import DocumentService
 
 router = APIRouter(prefix="/documents", tags=["documents"])
 
@@ -31,7 +33,10 @@ async def list_documents(
 
 
 @router.post(
-    "/upload", response_model=DocumentRead, status_code=status.HTTP_201_CREATED, operation_id="upload_document",
+    "/upload",
+    response_model=DocumentRead,
+    status_code=status.HTTP_201_CREATED,
+    operation_id="upload_document",
 )
 async def upload_document(
     file: UploadFile = File(...),
@@ -62,7 +67,11 @@ async def process_document(
     )
 
 
-@router.get("/{document_id}", response_model=DocumentReadWithContent, operation_id="get_document")
+@router.get(
+    "/{document_id}",
+    response_model=DocumentReadWithContent,
+    operation_id="get_document",
+)
 async def get_document(
     document_id: uuid.UUID,
     current_user: User = Depends(get_current_user),
@@ -71,7 +80,11 @@ async def get_document(
     return await svc.get_document(document_id, current_user)
 
 
-@router.patch("/{document_id}/settings", response_model=DocumentRead, operation_id="update_document_settings")
+@router.patch(
+    "/{document_id}/settings",
+    response_model=DocumentRead,
+    operation_id="update_document_settings",
+)
 async def update_document_settings(
     document_id: uuid.UUID,
     body: DocumentUpdateSettings,
@@ -81,7 +94,11 @@ async def update_document_settings(
     return await svc.update_document_settings(document_id, body, current_user)
 
 
-@router.patch("/{document_id}/content", response_model=DocumentRead, operation_id="update_document_content")
+@router.patch(
+    "/{document_id}/content",
+    response_model=DocumentRead,
+    operation_id="update_document_content",
+)
 async def update_document_content(
     document_id: uuid.UUID,
     body: DocumentUpdateContent,
@@ -91,7 +108,11 @@ async def update_document_content(
     return await svc.update_document_content(document_id, body, current_user)
 
 
-@router.delete("/{document_id}", status_code=status.HTTP_204_NO_CONTENT, operation_id="delete_document")
+@router.delete(
+    "/{document_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    operation_id="delete_document",
+)
 async def delete_document(
     document_id: uuid.UUID,
     current_user: User = Depends(get_current_user),

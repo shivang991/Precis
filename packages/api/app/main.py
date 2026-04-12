@@ -1,16 +1,18 @@
 from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from app.shared import get_settings, engine, Base, DomainError
-from app.users import auth_router, users_router
-from app.documents import router as documents_router
-from app.highlights import router as highlights_router
-# Import models so SQLAlchemy registers them before create_all
-import app.users.models  # noqa: F401
 import app.documents.models  # noqa: F401
 import app.highlights.models  # noqa: F401
+
+# Import models so SQLAlchemy registers them before create_all
+import app.users.models  # noqa: F401
+from app.documents import router as documents_router
+from app.highlights import router as highlights_router
+from app.shared import Base, DomainError, engine, get_settings
+from app.users import auth_router, users_router
 
 settings = get_settings()
 

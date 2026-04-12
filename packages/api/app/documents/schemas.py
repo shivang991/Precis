@@ -1,11 +1,14 @@
 import uuid
 from datetime import datetime
-from pydantic import BaseModel
-from .models import DocumentStatus, DocumentSource
-from app.document_content_tree import DocumentContentTreeNode, DocumentContentTree
 
+from pydantic import BaseModel
+
+from app.document_content_tree import DocumentContentTree, DocumentContentTreeNode
+
+from .models import DocumentSource, DocumentStatus
 
 # ── Document CRUD schemas ─────────────────────────────────────────────────────
+
 
 class DocumentBase(BaseModel):
     title: str
@@ -34,4 +37,5 @@ class DocumentUpdateSettings(BaseModel):
 
 class DocumentUpdateContent(BaseModel):
     """Used by the WYSIWYG editor to patch individual nodes."""
+
     nodes: list[DocumentContentTreeNode]

@@ -2,18 +2,19 @@ import uuid
 from typing import Annotated
 
 from fastapi import Depends
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.documents import DocumentService
 from app.shared import get_db
 from app.users import User
-from app.documents import DocumentService
-from .models import Highlight
-from .schemas import HighlightCreate
+
 from .errors import (
     DocumentNotReadyError,
     HighlightNotFoundError,
 )
+from .models import Highlight
+from .schemas import HighlightCreate
 
 
 class HighlightService:

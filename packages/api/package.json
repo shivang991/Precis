@@ -4,6 +4,10 @@
   "private": true,
   "scripts": {
     "dev": "env/bin/uvicorn app.main:app --reload --host 0.0.0.0 --port 8000",
-    "test": "env/bin/pytest tests/ -v"
+    "test": "env/bin/pytest tests/ -v",
+    "lint": "ruff check app/ tests/",
+    "lint:fix": "ruff check --fix app/ tests/",
+    "format": "ruff format app/ tests/",
+    "format:check": "ruff format --check app/ tests/"
   }
 }

@@ -1,22 +1,24 @@
 import uuid
 from datetime import datetime
-from enum import Enum as PyEnum
-from sqlalchemy import String, DateTime, ForeignKey, func, Enum, Text
-from sqlalchemy.dialects.postgresql import UUID, JSONB
+from enum import StrEnum
+
+from sqlalchemy import DateTime, Enum, ForeignKey, String, Text, func
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+
 from app.shared.database import Base
 
 
-class DocumentStatus(str, PyEnum):
+class DocumentStatus(StrEnum):
     PENDING = "pending"
     PROCESSING = "processing"
     READY = "ready"
     FAILED = "failed"
 
 
-class DocumentSource(str, PyEnum):
-    DIGITAL = "digital"   # Native PDF text extraction
-    SCANNED = "scanned"   # OCR-based extraction
+class DocumentSource(StrEnum):
+    DIGITAL = "digital"  # Native PDF text extraction
+    SCANNED = "scanned"  # OCR-based extraction
 
 
 class Document(Base):

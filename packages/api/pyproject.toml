@@ -1,0 +1,24 @@
+[tool.ruff]
+target-version = "py313"
+line-length = 88
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "UP",  # pyupgrade
+    "B",      # flake8-bugbear
+    "TID252", # ban relative imports that climb to parent packages
+    "TC",     # move type-only imports behind TYPE_CHECKING
+]
+ignore = [
+    "B008", # Depends() / File() / Form() in FastAPI signatures is idiomatic
+]
+
+[tool.ruff.lint.flake8-tidy-imports]
+ban-relative-imports = "parents"
+
+[tool.ruff.lint.isort]
+known-first-party = ["app"]

@@ -4,13 +4,12 @@ the document content tree live here.
 """
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from .schemas import DocumentContentTreeNode, NodeType
 
 
 class DocumentContentTreeService:
-
     # ── Node creation ────────────────────────────────────────────────────────
 
     def make_node(
@@ -51,7 +50,7 @@ class DocumentContentTreeService:
                 "author": author,
                 "page_count": page_count,
                 "source": source,
-                "created_at": datetime.now(timezone.utc).isoformat(),
+                "created_at": datetime.now(UTC).isoformat(),
             },
             "nodes": [n.model_dump() for n in nodes],
         }
@@ -64,7 +63,9 @@ class DocumentContentTreeService:
 
     # ── Tree traversal ───────────────────────────────────────────────────────
 
-    def flatten(self, nodes: list[DocumentContentTreeNode]) -> list[DocumentContentTreeNode]:
+    def flatten(
+        self, nodes: list[DocumentContentTreeNode]
+    ) -> list[DocumentContentTreeNode]:
         """Depth-first flattening of the node tree."""
         result: list[DocumentContentTreeNode] = []
         for node in nodes:
@@ -72,17 +73,23 @@ class DocumentContentTreeService:
             result.extend(self.flatten(node.children))
         return result
 
-    def build_node_index(self, document_content_tree: dict) -> dict[str, DocumentContentTreeNode]:
+    def build_node_index(
+        self, document_content_tree: dict
+    ) -> dict[str, DocumentContentTreeNode]:
         """Build a flat {node_id: node} lookup from the raw JSONB dict."""
         nodes = self.parse_nodes(document_content_tree.get("nodes", []))
         return {n.id: n for n in self.flatten(nodes)}
 
     # ── Tree mutation ────────────────────────────────────────────────────────
 
-    def nest(self, flat_nodes: list[DocumentContentTreeNode]) -> list[DocumentContentTreeNode]:
+    def nest(
+        self, flat_nodes: list[DocumentContentTreeNode]
+    ) -> list[DocumentContentTreeNode]:
         """Nest a flat list of nodes into a tree based on heading levels."""
         root: list[DocumentContentTreeNode] = []
-        stack: list[tuple[int, DocumentContentTreeNode | dict]] = [(0, {"children": root})]
+        stack: list[tuple[int, DocumentContentTreeNode | dict]] = [
+            (0, {"children": root})
+        ]
         for node in flat_nodes:
             level = node.level if node.type == NodeType.heading else 999
             while len(stack) > 1 and stack[-1][0] >= level:

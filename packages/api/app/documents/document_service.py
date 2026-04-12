@@ -3,21 +3,22 @@ from collections.abc import AsyncIterator
 from typing import Annotated
 
 from fastapi import Depends
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.shared import StorageService, get_settings, get_db
 from app.document_content_tree import DocumentContentTreeService
+from app.shared import StorageService, get_db, get_settings
 from app.users import User
-from .models import Document, DocumentStatus, DocumentSource
-from .schemas import DocumentUpdateSettings, DocumentUpdateContent
-from .parser_service import ParserService
+
 from .errors import (
     DocumentNotFoundError,
     DocumentNotProcessedError,
-    InvalidFileTypeError,
     FileTooLargeError,
+    InvalidFileTypeError,
 )
+from .models import Document, DocumentSource, DocumentStatus
+from .parser_service import ParserService
+from .schemas import DocumentUpdateContent, DocumentUpdateSettings
 
 settings = get_settings()
 
@@ -27,7 +28,9 @@ class DocumentService:
         self,
         db: Annotated[AsyncSession, Depends(get_db)],
         parser: Annotated[ParserService, Depends(ParserService)],
-        tree_svc: Annotated[DocumentContentTreeService, Depends(DocumentContentTreeService)],
+        tree_svc: Annotated[
+            DocumentContentTreeService, Depends(DocumentContentTreeService)
+        ],
         storage: Annotated[StorageService, Depends(StorageService)],
     ) -> None:
         self.db = db
@@ -146,9 +149,7 @@ class DocumentService:
             raise DocumentNotProcessedError()
 
         updated_map = {n.id: n.model_dump() for n in body.nodes}
-        typed_nodes = self.tree_svc.parse_nodes(
-            doc.document_content_tree["nodes"]
-        )
+        typed_nodes = self.tree_svc.parse_nodes(doc.document_content_tree["nodes"])
         patched = self.tree_svc.patch(typed_nodes, updated_map)
         doc.document_content_tree["nodes"] = [n.model_dump() for n in patched]
         await self.db.flush()

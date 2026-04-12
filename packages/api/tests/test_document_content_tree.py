@@ -1,15 +1,14 @@
 """Unit tests for document_content_tree — no DB or network required."""
 
-import pytest
 from app.services.standard_format import (
-    make_node,
     build_document_content_tree,
-    get_ancestors,
     build_summary_sections,
+    get_ancestors,
+    make_node,
 )
 
-
 # ── make_node ─────────────────────────────────────────────────────────────────
+
 
 def test_make_node_required_fields():
     node = make_node("paragraph", text="Hello")
@@ -39,6 +38,7 @@ def test_make_node_unique_ids():
 
 # ── build_document_content_tree ─────────────────────────────────────────────────────
 
+
 def test_build_document_content_tree_structure():
     node = make_node("paragraph", text="Body")
     doc = build_document_content_tree(
@@ -59,6 +59,7 @@ def test_build_document_content_tree_structure():
 
 # ── get_ancestors ─────────────────────────────────────────────────────────────
 
+
 def _make_doc():
     """
     Build a small document tree:
@@ -75,7 +76,9 @@ def _make_doc():
     p2["id"] = "p2"
     h1 = make_node("heading", text="Chapter", level=1, children=[h2, p2])
     h1["id"] = "h1"
-    return build_document_content_tree(title="Doc", nodes=[h1], source="digital", page_count=1)
+    return build_document_content_tree(
+        title="Doc", nodes=[h1], source="digital", page_count=1
+    )
 
 
 def test_get_ancestors_returns_heading_chain():
@@ -112,6 +115,7 @@ def test_get_ancestors_unknown_node_id():
 
 
 # ── build_summary_sections ────────────────────────────────────────────────────
+
 
 class _FakeHighlight:
     def __init__(self, id, node_ids, ancestor_node_ids, color="yellow", note=None):

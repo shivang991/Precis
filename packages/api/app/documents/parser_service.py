@@ -5,10 +5,13 @@ from typing import Annotated
 import pdfplumber
 import pytesseract
 from fastapi import Depends
-from PIL import Image
 from pdf2image import convert_from_bytes
 
-from app.document_content_tree import DocumentContentTreeNode, DocumentContentTreeService, NodeType
+from app.document_content_tree import (
+    DocumentContentTreeNode,
+    DocumentContentTreeService,
+    NodeType,
+)
 from app.shared import get_settings
 
 settings = get_settings()
@@ -21,11 +24,15 @@ class ParsedPDF:
 
 
 class ParserService:
-
-    def __init__(self, tree_svc: Annotated[DocumentContentTreeService, Depends(DocumentContentTreeService)]) -> None:
+    def __init__(
+        self,
+        tree_svc: Annotated[
+            DocumentContentTreeService, Depends(DocumentContentTreeService)
+        ],
+    ) -> None:
         self.tree_svc = tree_svc
 
-    # ── Configuration ───────────────────────────────────────────────────────────────────
+    # ── Configuration ─────────────────────────────────────────────────────────────
 
     digital_pdf_heading_size_map: list[tuple[float, int]] = [
         (28, 1),
@@ -45,7 +52,7 @@ class ParserService:
     ]
     ocr_lang = settings.ocr_language
 
-    # –– Digital PDFs –––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––
+    # –– Digital PDFs ––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––
 
     def parse_digital_pdf(self, pdf_bytes: bytes) -> ParsedPDF:
         nodes: list[DocumentContentTreeNode] = []
@@ -108,7 +115,10 @@ class ParserService:
                         elif heading_level:
                             nodes.append(
                                 self.tree_svc.make_node(
-                                    "heading", text=text, level=heading_level, page=page_num
+                                    "heading",
+                                    text=text,
+                                    level=heading_level,
+                                    page=page_num,
                                 )
                             )
                         else:
@@ -127,7 +137,9 @@ class ParserService:
                 for table in page.extract_tables():
                     if table:
                         nodes.append(
-                            self.tree_svc.make_node(NodeType.table, page=page_num, content={"rows": table})
+                            self.tree_svc.make_node(
+                                NodeType.table, page=page_num, content={"rows": table}
+                            )
                         )
 
         return ParsedPDF(nodes=nodes, page_count=page_count)
@@ -138,10 +150,10 @@ class ParserService:
                 return level
         return None
 
-    # –– Scanned PDFs –––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––
+    # –– Scanned PDFs ––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––
 
     def parse_scanned_pdf(self, pdf_bytes: bytes) -> ParsedPDF:
-        images: list[Image.Image] = convert_from_bytes(pdf_bytes, dpi=self.ocr_dpi)
+        images = convert_from_bytes(pdf_bytes, dpi=self.ocr_dpi)
         page_count = len(images)
         nodes: list[DocumentContentTreeNode] = []
 
@@ -170,9 +182,8 @@ class ParserService:
                 block_num = data["block_num"][i]
                 par_num = data["par_num"][i]
 
-                has_paragraph_break = (
-                    prev_block is not None
-                    and (block_num != prev_block or par_num != prev_par)
+                has_paragraph_break = prev_block is not None and (
+                    block_num != prev_block or par_num != prev_par
                 )
 
                 heading_level = self._ocr_height_to_heading_level(height)
@@ -211,6 +222,7 @@ class ParserService:
     ) -> DocumentContentTreeNode:
         level = self._ocr_height_to_heading_level(height)
         if level:
-            return self.tree_svc.make_node(NodeType.heading, text=text, level=level, page=page)
+            return self.tree_svc.make_node(
+                NodeType.heading, text=text, level=level, page=page
+            )
         return self.tree_svc.make_node(NodeType.paragraph, text=text, page=page)
-

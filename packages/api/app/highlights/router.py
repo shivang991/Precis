@@ -1,8 +1,9 @@
 import uuid
+
 from fastapi import APIRouter, Depends, status
 
-from app.users import get_current_user
-from app.users import User
+from app.users import User, get_current_user
+
 from .schemas import HighlightCreate, HighlightRead
 from .service import HighlightService
 
@@ -18,7 +19,12 @@ async def list_highlights(
     return await svc.list_highlights(document_id, current_user)
 
 
-@router.post("/", response_model=list[HighlightRead], status_code=status.HTTP_201_CREATED, operation_id="add_highlights")
+@router.post(
+    "/",
+    response_model=list[HighlightRead],
+    status_code=status.HTTP_201_CREATED,
+    operation_id="add_highlights",
+)
 async def add_highlight(
     document_id: uuid.UUID,
     body: list[HighlightCreate],
@@ -28,7 +34,9 @@ async def add_highlight(
     return await svc.add_highlights(document_id, body, current_user)
 
 
-@router.delete("/", status_code=status.HTTP_204_NO_CONTENT, operation_id="remove_highlights")
+@router.delete(
+    "/", status_code=status.HTTP_204_NO_CONTENT, operation_id="remove_highlights"
+)
 async def remove_highlights(
     document_id: uuid.UUID,
     highlight_ids: list[uuid.UUID],

@@ -4,19 +4,20 @@ Google OAuth 2.0 flow + JWT issuance + user operations.
 
 import secrets
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
 import httpx
 from fastapi import Depends
 from jose import jwt
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.shared import get_settings, get_db
-from .models import User
-from .schemas import UserUpdateSettings, GoogleAuthUrl, TokenResponse
+from app.shared import get_db, get_settings
+
 from .errors import GoogleAuthError
+from .models import User
+from .schemas import GoogleAuthUrl, TokenResponse, UserUpdateSettings
 
 settings = get_settings()
 
@@ -42,14 +43,18 @@ class UserService:
             "state": state,
         }
         query = "&".join(f"{k}={v}" for k, v in params.items())
-        return GoogleAuthUrl(url=f"https://accounts.google.com/o/oauth2/v2/auth?{query}")
+        return GoogleAuthUrl(
+            url=f"https://accounts.google.com/o/oauth2/v2/auth?{query}"
+        )
 
-    async def login_with_google(self, code: str, redirect_uri: str | None = None) -> TokenResponse:
+    async def login_with_google(
+        self, code: str, redirect_uri: str | None = None
+    ) -> TokenResponse:
         """Full OAuth flow — returns a signed JWT for the user."""
         try:
             google_info = await self._exchange_code_for_user_info(code, redirect_uri)
-        except Exception:
-            raise GoogleAuthError()
+        except Exception as exc:
+            raise GoogleAuthError() from exc
         user = await self._get_or_create_user(google_info)
         return TokenResponse(access_token=self._create_access_token(user.id))
 
@@ -62,19 +67,28 @@ class UserService:
     # ── Private helpers ──────────────────────────────────────────────────────
 
     def _create_access_token(self, user_id: uuid.UUID) -> str:
-        expire = datetime.now(timezone.utc) + timedelta(minutes=settings.jwt_access_token_expire_minutes)
+        expire = datetime.now(UTC) + timedelta(
+            minutes=settings.jwt_access_token_expire_minutes
+        )
         payload = {"sub": str(user_id), "exp": expire}
-        return jwt.encode(payload, settings.jwt_secret_key, algorithm=settings.jwt_algorithm)
+        return jwt.encode(
+            payload, settings.jwt_secret_key, algorithm=settings.jwt_algorithm
+        )
 
-    async def _exchange_code_for_user_info(self, code: str, redirect_uri: str | None = None) -> dict:
+    async def _exchange_code_for_user_info(
+        self, code: str, redirect_uri: str | None = None
+    ) -> dict:
         async with httpx.AsyncClient() as client:
-            token_resp = await client.post(GOOGLE_TOKEN_URL, data={
-                "code": code,
-                "client_id": settings.google_client_id,
-                "client_secret": settings.google_client_secret,
-                "redirect_uri": redirect_uri or settings.google_redirect_uri,
-                "grant_type": "authorization_code",
-            })
+            token_resp = await client.post(
+                GOOGLE_TOKEN_URL,
+                data={
+                    "code": code,
+                    "client_id": settings.google_client_id,
+                    "client_secret": settings.google_client_secret,
+                    "redirect_uri": redirect_uri or settings.google_redirect_uri,
+                    "grant_type": "authorization_code",
+                },
+            )
             token_resp.raise_for_status()
             access_token = token_resp.json()["access_token"]
 

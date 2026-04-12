@@ -1,9 +1,11 @@
 import uuid
 from datetime import datetime
-from sqlalchemy import DateTime, ForeignKey, func, Text, Integer
+
+from sqlalchemy import DateTime, ForeignKey, Integer, Text, func
+from sqlalchemy import String as SAString
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from sqlalchemy import String as SAString
+
 from app.shared.database import Base
 
 

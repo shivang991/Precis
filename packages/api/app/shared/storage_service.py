@@ -4,7 +4,9 @@ Object storage abstraction — wraps boto3 for S3-compatible backends
 """
 
 import uuid
+
 import aioboto3
+
 from .config import get_settings
 
 settings = get_settings()
@@ -26,7 +28,9 @@ class StorageService:
             kwargs["endpoint_url"] = self._endpoint_url
         return self._session.client(**kwargs)
 
-    async def upload_file(self, file_bytes: bytes, content_type: str = "application/pdf") -> str:
+    async def upload_file(
+        self, file_bytes: bytes, content_type: str = "application/pdf"
+    ) -> str:
         """Upload bytes to storage and return the storage key."""
         key = f"uploads/{uuid.uuid4()}.pdf"
         async with self._client() as s3:
