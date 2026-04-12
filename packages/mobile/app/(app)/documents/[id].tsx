@@ -34,17 +34,17 @@ export default function DocumentViewerScreen() {
   const { data: highlights = [] } = useQuery({
     queryKey: ["highlights", id],
     queryFn: () => api.listHighlights(id),
-    enabled: !!id && document?.status === "READY",
+    enabled: !!id && document?.status === "ready",
   });
 
   const createHighlight = useMutation({
-    mutationFn: (data: HighlightCreate) => api.createHighlight(id, data),
+    mutationFn: (data: HighlightCreate) => api.addHighlights(id, [data]),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["highlights", id] }),
     onError: (e: any) => Alert.alert("Highlight failed", e.message),
   });
 
   const handleSelect = (nodeId: string, start: number, end: number) => {
-    createHighlight.mutate({ node_id: nodeId, start_offset: start, end_offset: end, color: activeColor });
+    createHighlight.mutate({ node_id: nodeId, start_offset: start, end_offset: end });
   };
 
   if (docLoading) {
@@ -63,7 +63,7 @@ export default function DocumentViewerScreen() {
     );
   }
 
-  if (document.status !== "READY") {
+  if (document.status !== "ready") {
     return (
       <View style={styles.center}>
         <ActivityIndicator size="large" />

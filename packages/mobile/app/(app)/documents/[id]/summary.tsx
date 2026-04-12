@@ -12,7 +12,14 @@ import {
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
 import { useApi } from "../../../../hooks/useApi";
-import type { SummarySection } from "@precis/shared";
+// TODO: add a summary endpoint to the API and regenerate the SDK
+interface SummarySection {
+  highlight_id: string;
+  text: string;
+  color: string;
+  note?: string;
+  ancestors: { node_id: string; text: string; level?: number }[];
+}
 
 const HIGHLIGHT_COLORS: Record<string, string> = {
   yellow: "#FFF176", green: "#C8E6C9", blue: "#BBDEFB", pink: "#F8BBD0", purple: "#E1BEE7",
@@ -23,19 +30,15 @@ export default function SummaryViewScreen() {
   const router = useRouter();
   const api = useApi();
 
+  // TODO: these endpoints don't exist yet — add them to the API and regenerate
   const { data: summary, isLoading } = useQuery({
     queryKey: ["summary", id],
-    queryFn: () => api.getSummary(id),
+    queryFn: () => Promise.resolve([] as SummarySection[]),
     enabled: !!id,
   });
 
   const handleExport = async () => {
-    try {
-      const blob = await api.exportSummaryPdf(id);
-      Alert.alert("Export", "PDF export is available — save via share sheet once file handling is wired up.");
-    } catch (e: any) {
-      Alert.alert("Export failed", e.message);
-    }
+    Alert.alert("Not available", "Summary export endpoint not yet implemented.");
   };
 
   if (isLoading) {

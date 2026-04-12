@@ -10,7 +10,7 @@ import {
 import { useRouter } from "expo-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import * as DocumentPicker from "expo-document-picker";
-import type { Document } from "@precis/shared";
+import type { DocumentRead } from "@precis/shared";
 import { useApi } from "../../hooks/useApi";
 
 export default function FilesListScreen() {
@@ -31,20 +31,16 @@ export default function FilesListScreen() {
       });
       if (result.canceled) return;
 
-      const file = result.assets[0];
-      const form = new FormData();
-      form.append("file", {
-        uri: file.uri,
-        name: file.name,
-        type: "application/pdf",
-      } as any);
-      return api.uploadDocument(form);
+      const asset = result.assets[0];
+      // React Native FormData accepts {uri, name, type} objects in place of Blob
+      const file = { uri: asset.uri, name: asset.name, type: "application/pdf" } as unknown as Blob;
+      return api.uploadDocument({ file });
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["documents"] }),
     onError: (e: any) => Alert.alert("Upload failed", e.message),
   });
 
-  const renderItem = ({ item }: { item: Document }) => (
+  const renderItem = ({ item }: { item: DocumentRead }) => (
     <TouchableOpacity
       style={styles.row}
       onPress={() => router.push(`/(app)/documents/${item.id}`)}
@@ -54,7 +50,7 @@ export default function FilesListScreen() {
           {item.title}
         </Text>
         <Text style={styles.docMeta}>
-          {item.source_type} · {item.status}
+          {item.source} · {item.status}
         </Text>
       </View>
       <Text style={styles.openLabel}>Open</Text>

@@ -1,11 +1,11 @@
 import { create } from "zustand";
-import type { User } from "@precis/shared";
+import type { UserRead } from "@precis/shared";
 
 interface AuthState {
   token: string | null;
-  user: User | null;
+  user: UserRead | null;
   setToken: (token: string) => void;
-  setUser: (user: User) => void;
+  setUser: (user: UserRead) => void;
   logout: () => void;
 }
 

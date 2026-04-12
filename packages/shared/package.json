@@ -6,12 +6,14 @@
   "types": "./src/index.ts",
   "scripts": {
     "build": "tsc",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "codegen": "cd ../api && PYTHONPATH=. env/bin/python scripts/export_openapi.py > ../shared/openapi.json && cd ../shared && orval"
   },
   "dependencies": {
     "axios": "^1.7.9"
   },
   "devDependencies": {
+    "orval": "^8.7.0",
     "typescript": "^5.7.2"
   }
 }

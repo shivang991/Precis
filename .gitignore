@@ -62,3 +62,7 @@ web-build/
 
 # TypeScript
 *.tsbuildinfo
+
+# Generated SDK
+packages/shared/openapi.json
+packages/shared/src/generated/

@@ -1,11 +1,11 @@
 import React from "react";
 import { View, Text, StyleSheet } from "react-native";
-import type { DocumentNode, Highlight } from "@precis/shared";
+import type { DocumentContentTreeNodeOutput, HighlightRead } from "@precis/shared";
 import { HighlightableText } from "./HighlightableText";
 
 interface NodeRendererProps {
-  nodes: DocumentNode[];
-  highlights: Highlight[];
+  nodes: DocumentContentTreeNodeOutput[];
+  highlights: HighlightRead[];
   highlightMode: boolean;
   activeColor: string;
   onCreateHighlight: (nodeId: string, start: number, end: number) => void;
@@ -41,8 +41,8 @@ function RenderNode({
   activeColor,
   onCreateHighlight,
 }: {
-  node: DocumentNode;
-  highlights: Highlight[];
+  node: DocumentContentTreeNodeOutput;
+  highlights: HighlightRead[];
   highlightMode: boolean;
   activeColor: string;
   onCreateHighlight: (nodeId: string, start: number, end: number) => void;
@@ -53,7 +53,7 @@ function RenderNode({
     case "heading":
       return (
         <View style={styles.headingContainer}>
-          <Text style={[styles.heading, headingStyles[node.level]]}>
+          <Text style={[styles.heading, node.level != null && headingStyles[node.level]]}>
             {node.text}
           </Text>
           {node.children && node.children.length > 0 && (
@@ -84,7 +84,7 @@ function RenderNode({
 
     case "list_item":
       return (
-        <View style={[styles.listItem, { paddingLeft: (node.depth ?? 0) * 16 + 8 }]}>
+        <View style={[styles.listItem, { paddingLeft: ((node.content?.depth as number) ?? 0) * 16 + 8 }]}>
           <Text style={styles.bullet}>•</Text>
           <HighlightableText
             nodeId={node.id}
@@ -101,11 +101,11 @@ function RenderNode({
       return (
         <View style={styles.table}>
           <View style={styles.tableRow}>
-            {(node.headers ?? []).map((h, i) => (
+            {((node.content?.headers as string[]) ?? []).map((h, i) => (
               <Text key={i} style={styles.tableHeader}>{h}</Text>
             ))}
           </View>
-          {(node.rows ?? []).map((row, ri) => (
+          {((node.content?.rows as string[][]) ?? []).map((row, ri) => (
             <View key={ri} style={styles.tableRow}>
               {row.map((cell, ci) => (
                 <Text key={ci} style={styles.tableCell}>{cell}</Text>

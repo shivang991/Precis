@@ -45,9 +45,9 @@ export default function LoginScreen() {
 
   async function handleCodeExchange(code: string) {
     try {
-      const { access_token } = await api.exchangeCode(code, redirectUri);
+      const { access_token } = await api.exchangeToken({ code, redirect_uri: redirectUri });
       setToken(access_token);
-      const user = await createApiClient(API_BASE_URL, () => access_token).getMe();
+      const user = await createApiClient(API_BASE_URL, () => access_token).getAuthMe();
       setUser(user);
       router.replace("/(app)");
     } catch (e: any) {

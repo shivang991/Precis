@@ -1,6 +1,6 @@
 import React, { useRef } from "react";
 import { Text, StyleSheet, Platform } from "react-native";
-import type { Highlight } from "@precis/shared";
+import type { HighlightRead } from "@precis/shared";
 
 const HIGHLIGHT_COLORS: Record<string, string> = {
   yellow: "#FFF176",
@@ -13,7 +13,7 @@ const HIGHLIGHT_COLORS: Record<string, string> = {
 interface HighlightableTextProps {
   nodeId: string;
   text: string;
-  highlights: Highlight[];
+  highlights: HighlightRead[];
   highlightMode: boolean;
   activeColor: string;
   onSelect: (nodeId: string, start: number, end: number) => void;
@@ -91,18 +91,18 @@ interface Segment {
   color?: string;
 }
 
-function buildSegments(text: string, highlights: Highlight[]): Segment[] {
+function buildSegments(text: string, highlights: HighlightRead[]): Segment[] {
   if (highlights.length === 0) return [{ text }];
 
   // Build a list of [start, end, color] ranges, sorted by start
   const ranges = highlights
     .filter((h) => h.start_offset != null && h.end_offset != null)
-    .map((h) => ({ start: h.start_offset!, end: h.end_offset!, color: h.color }))
+    .map((h) => ({ start: h.start_offset!, end: h.end_offset!, color: "yellow" }))
     .sort((a, b) => a.start - b.start);
 
   if (ranges.length === 0) {
     // Node-level highlight (no offsets) — highlight the whole text
-    return [{ text, color: highlights[0].color }];
+    return [{ text, color: "yellow" }];
   }
 
   const segments: Segment[] = [];

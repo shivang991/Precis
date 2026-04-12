@@ -1,12 +1,23 @@
-import axios, { type AxiosInstance } from "axios";
-import type { User, UserSettingsUpdate } from "../types/user";
-import type { Document, DocumentSettingsUpdate, DocumentContentPatch } from "../types/document";
-import type { Highlight, HighlightCreate, HighlightUpdate, SummarySection } from "../types/highlight";
+import axios from "axios";
+import type { AxiosResponse } from "axios";
+import { getAuth } from "../generated/auth/auth";
+import { getDocuments } from "../generated/documents/documents";
+import { getHighlights } from "../generated/highlights/highlights";
+import { getUsers } from "../generated/users/users";
 
-export function createApiClient(baseURL: string, getToken: () => string | null): ApiClient {
-  const http: AxiosInstance = axios.create({ baseURL });
+type UnwrapAxiosResponse<T> = {
+  [K in keyof T]: T[K] extends (...args: infer A) => Promise<AxiosResponse<infer R>>
+    ? (...args: A) => Promise<R>
+    : T[K];
+};
 
-  http.interceptors.request.use((config) => {
+export function createApiClient(
+  baseURL: string,
+  getToken: () => string | null,
+) {
+  const instance = axios.create({ baseURL });
+
+  instance.interceptors.request.use((config) => {
     const token = getToken();
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
@@ -14,93 +25,17 @@ export function createApiClient(baseURL: string, getToken: () => string | null):
     return config;
   });
 
-  return {
-    // Auth
-    getLoginUrl: () =>
-      http.get<{ url: string }>("/api/v1/auth/login").then((r) => r.data),
-    getLoginUrlForMobile: (redirectUri: string) =>
-      http
-        .get<{ url: string }>("/api/v1/auth/login", { params: { redirect_uri: redirectUri } })
-        .then((r) => r.data),
-    exchangeCode: (code: string, redirectUri?: string) =>
-      http
-        .post<{ access_token: string; token_type: string }>("/api/v1/auth/token", {
-          code,
-          redirect_uri: redirectUri,
-        })
-        .then((r) => r.data),
-    getMe: () => http.get<User>("/api/v1/auth/me").then((r) => r.data),
+  // Auto-unwrap response data so callers get `Promise<T>` instead of `Promise<AxiosResponse<T>>`
+  instance.interceptors.response.use((response) => response.data as any);
 
-    // Users
-    getProfile: () => http.get<User>("/api/v1/users/me").then((r) => r.data),
-    updateSettings: (data: UserSettingsUpdate) =>
-      http.patch<User>("/api/v1/users/me/settings", data).then((r) => r.data),
-
-    // Documents
-    listDocuments: () =>
-      http.get<Document[]>("/api/v1/documents").then((r) => r.data),
-    getDocument: (id: string) =>
-      http.get<Document>(`/api/v1/documents/${id}`).then((r) => r.data),
-    uploadDocument: (file: FormData) =>
-      http.post<Document>("/api/v1/documents/upload", file, {
-        headers: { "Content-Type": "multipart/form-data" },
-      }).then((r) => r.data),
-    updateDocumentSettings: (id: string, data: DocumentSettingsUpdate) =>
-      http.patch<Document>(`/api/v1/documents/${id}/settings`, data).then((r) => r.data),
-    patchDocumentContent: (id: string, patch: DocumentContentPatch) =>
-      http.patch<Document>(`/api/v1/documents/${id}/content`, patch).then((r) => r.data),
-    deleteDocument: (id: string) =>
-      http.delete(`/api/v1/documents/${id}`).then((r) => r.data),
-
-    // Highlights
-    listHighlights: (documentId: string) =>
-      http.get<Highlight[]>(`/api/v1/documents/${documentId}/highlights`).then((r) => r.data),
-    createHighlight: (documentId: string, data: HighlightCreate) =>
-      http.post<Highlight>(`/api/v1/documents/${documentId}/highlights`, data).then((r) => r.data),
-    updateHighlight: (documentId: string, highlightId: string, data: HighlightUpdate) =>
-      http
-        .patch<Highlight>(`/api/v1/documents/${documentId}/highlights/${highlightId}`, data)
-        .then((r) => r.data),
-    deleteHighlight: (documentId: string, highlightId: string) =>
-      http.delete(`/api/v1/documents/${documentId}/highlights/${highlightId}`).then((r) => r.data),
-    clearHighlights: (documentId: string) =>
-      http.delete(`/api/v1/documents/${documentId}/highlights`).then((r) => r.data),
-    getSummary: (documentId: string) =>
-      http
-        .get<SummarySection[]>(`/api/v1/documents/${documentId}/highlights/summary`)
-        .then((r) => r.data),
-
-    // Export
-    exportDocumentPdf: (documentId: string) =>
-      http
-        .get(`/api/v1/export/documents/${documentId}/pdf`, { responseType: "blob" })
-        .then((r) => r.data as Blob),
-    exportSummaryPdf: (documentId: string) =>
-      http
-        .get(`/api/v1/export/documents/${documentId}/summary/pdf`, { responseType: "blob" })
-        .then((r) => r.data as Blob),
+  const raw = {
+    ...getAuth(instance),
+    ...getDocuments(instance),
+    ...getHighlights(instance),
+    ...getUsers(instance),
   };
+
+  return raw as unknown as UnwrapAxiosResponse<typeof raw>;
 }
 
-export interface ApiClient {
-  getLoginUrl: () => Promise<{ url: string }>;
-  getLoginUrlForMobile: (redirectUri: string) => Promise<{ url: string }>;
-  exchangeCode: (code: string, redirectUri?: string) => Promise<{ access_token: string; token_type: string }>;
-  getMe: () => Promise<User>;
-  getProfile: () => Promise<User>;
-  updateSettings: (data: UserSettingsUpdate) => Promise<User>;
-  listDocuments: () => Promise<Document[]>;
-  getDocument: (id: string) => Promise<Document>;
-  uploadDocument: (file: FormData) => Promise<Document>;
-  updateDocumentSettings: (id: string, data: DocumentSettingsUpdate) => Promise<Document>;
-  patchDocumentContent: (id: string, patch: DocumentContentPatch) => Promise<Document>;
-  deleteDocument: (id: string) => Promise<void>;
-  listHighlights: (documentId: string) => Promise<Highlight[]>;
-  createHighlight: (documentId: string, data: HighlightCreate) => Promise<Highlight>;
-  updateHighlight: (documentId: string, highlightId: string, data: HighlightUpdate) => Promise<Highlight>;
-  deleteHighlight: (documentId: string, highlightId: string) => Promise<void>;
-  clearHighlights: (documentId: string) => Promise<void>;
-  getSummary: (documentId: string) => Promise<SummarySection[]>;
-  exportDocumentPdf: (documentId: string) => Promise<Blob>;
-  exportSummaryPdf: (documentId: string) => Promise<Blob>;
-}
+export type ApiClient = ReturnType<typeof createApiClient>;
