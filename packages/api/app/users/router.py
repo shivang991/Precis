@@ -38,11 +38,17 @@ async def google_login(
 )
 async def google_callback(
     code: str = Query(...),
+    state: str = Query(default=""),
     redirect_uri: str | None = Query(default=None),
     svc: UserService = Depends(get_user_service),
 ):
-    """Exchange Google auth code for a Precis JWT (web callback)."""
-    return await svc.login_with_google(code, redirect_uri)
+    """Exchange Google auth code for a Precis JWT (web callback).
+
+    When the OAuth state contains an encoded mobile redirect URI the
+    response is a 302 redirect to ``<redirect>?access_token=<jwt>``
+    so the mobile app receives the token via its deep-link handler.
+    """
+    return await svc.handle_google_callback(code, state, redirect_uri)
 
 
 @auth_router.post("/token", response_model=TokenResponse, operation_id="exchange_token")

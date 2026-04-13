@@ -2,11 +2,15 @@
 Google OAuth 2.0 flow + JWT issuance + user operations.
 """
 
+import base64
+import json
 import secrets
 import uuid
 from datetime import UTC, datetime, timedelta
+from urllib.parse import urlencode
 
 import httpx
+from fastapi.responses import RedirectResponse
 from jose import jwt
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -28,16 +32,28 @@ class UserService:
         self.db = db
 
     def get_google_auth_url(self, redirect_uri: str | None = None) -> GoogleAuthUrl:
-        state = secrets.token_urlsafe(16)
+        csrf = secrets.token_urlsafe(16)
+
+        # When a mobile redirect URI is provided (e.g. precis://auth), encode
+        # it into the OAuth state so the callback can redirect there after
+        # exchanging the code.  Google's redirect_uri is always the backend
+        # callback. Custom schemes aren't accepted by web-type OAuth clients.
+        if redirect_uri:
+            state_payload = json.dumps({"s": csrf, "r": redirect_uri})
+            encoded = base64.urlsafe_b64encode(state_payload.encode())
+            state = encoded.decode().rstrip("=")
+        else:
+            state = csrf
+
         params = {
             "client_id": settings.google_client_id,
-            "redirect_uri": redirect_uri or settings.google_redirect_uri,
+            "redirect_uri": settings.google_redirect_uri,
             "response_type": "code",
             "scope": "openid email profile",
             "access_type": "offline",
             "state": state,
         }
-        query = "&".join(f"{k}={v}" for k, v in params.items())
+        query = urlencode(params)
         return GoogleAuthUrl(
             url=f"https://accounts.google.com/o/oauth2/v2/auth?{query}"
         )
@@ -53,6 +69,24 @@ class UserService:
         user = await self._get_or_create_user(google_info)
         return TokenResponse(access_token=self._create_access_token(user.id))
 
+    async def handle_google_callback(
+        self,
+        code: str,
+        state: str,
+        redirect_uri: str | None = None,
+    ) -> TokenResponse | RedirectResponse:
+        """Exchange a Google auth code and return a token or mobile redirect."""
+        result = await self.login_with_google(code, redirect_uri)
+
+        _, mobile_redirect = self._parse_oauth_state(state)
+        if mobile_redirect:
+            target = f"{mobile_redirect}?{urlencode({
+                'access_token': result.access_token,
+            })}"
+            return RedirectResponse(url=target)
+
+        return result
+
     async def update_settings(self, user: User, body: UserUpdateSettings) -> User:
         for field, value in body.model_dump(exclude_none=True).items():
             setattr(user, field, value)
@@ -60,6 +94,15 @@ class UserService:
         return user
 
     # ── Private helpers ──────────────────────────────────────────────────────
+
+    def _parse_oauth_state(state: str) -> tuple[str, str | None]:
+        """Extract (csrf_token, mobile_redirect | None) from state."""
+        try:
+            padded = state + "=" * (-len(state) % 4)
+            data = json.loads(base64.urlsafe_b64decode(padded))
+            return data["s"], data.get("r")
+        except Exception:
+            return state, None
 
     def _create_access_token(self, user_id: uuid.UUID) -> str:
         expire = datetime.now(UTC) + timedelta(
