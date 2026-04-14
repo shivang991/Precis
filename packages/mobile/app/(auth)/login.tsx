@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useState } from "react";
 import {
   View,
   Text,
@@ -8,11 +8,12 @@ import {
   Alert,
 } from "react-native";
 import * as WebBrowser from "expo-web-browser";
-import { useAuthRequest, makeRedirectUri } from "expo-auth-session";
+import * as Linking from "expo-linking";
+import { makeRedirectUri } from "expo-auth-session";
 import { useRouter } from "expo-router";
 import { useAuthStore } from "../../store/auth";
 import { createApiClient } from "@precis/shared";
-import { API_BASE_URL, MOBILE_REDIRECT_URI } from "../../constants/api";
+import { API_BASE_URL } from "../../constants/api";
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -21,37 +22,40 @@ const api = createApiClient(API_BASE_URL, () => null);
 export default function LoginScreen() {
   const router = useRouter();
   const { setToken, setUser } = useAuthStore();
+  const [loading, setLoading] = useState(false);
 
   const redirectUri = makeRedirectUri({ scheme: "precis", path: "auth" });
 
-  const [request, response, promptAsync] = useAuthRequest(
-    {
-      clientId: "", // Not needed — we redirect through our backend
-      redirectUri,
-      scopes: [],
-      // We open our backend's /api/v1/auth/login URL directly instead
-    },
-    { authorizationEndpoint: `${API_BASE_URL}/api/v1/auth/login` }
-  );
-
-  useEffect(() => {
-    if (response?.type === "success") {
-      const { code } = response.params;
-      handleCodeExchange(code);
-    } else if (response?.type === "error") {
-      Alert.alert("Login failed", response.error?.message ?? "Unknown error");
-    }
-  }, [response]);
-
-  async function handleCodeExchange(code: string) {
+  async function handleLogin() {
+    setLoading(true);
     try {
-      const { access_token } = await api.exchangeToken({ code, redirect_uri: redirectUri });
-      setToken(access_token);
-      const user = await createApiClient(API_BASE_URL, () => access_token).getAuthMe();
-      setUser(user);
-      router.replace("/(app)");
+      // 1. Ask the backend for the Google OAuth URL, passing our deep-link
+      //    redirect URI so the callback knows where to send the token.
+      const { url } = await api.getLoginUrl({ redirect_uri: redirectUri });
+
+      // 2. Open the Google consent screen.  The backend callback will
+      //    redirect to  precis://auth?access_token=<jwt>  after exchange.
+      const result = await WebBrowser.openAuthSessionAsync(url, redirectUri);
+
+      if (result.type === "success") {
+        const parsed = Linking.parse(result.url);
+        const accessToken = parsed.queryParams?.access_token as
+          | string
+          | undefined;
+        if (!accessToken) throw new Error("No access token in redirect");
+
+        setToken(accessToken);
+        const user = await createApiClient(
+          API_BASE_URL,
+          () => accessToken,
+        ).getAuthMe();
+        setUser(user);
+        router.replace("/(app)");
+      }
     } catch (e: any) {
-      Alert.alert("Login failed", e.message ?? "Could not exchange code");
+      Alert.alert("Login failed", e.message ?? "Could not complete login");
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -61,10 +65,10 @@ export default function LoginScreen() {
       <Text style={styles.subtitle}>Your intelligent document companion</Text>
       <TouchableOpacity
         style={styles.button}
-        onPress={() => promptAsync()}
-        disabled={!request}
+        onPress={handleLogin}
+        disabled={loading}
       >
-        {!request ? (
+        {loading ? (
           <ActivityIndicator color="#fff" />
         ) : (
           <Text style={styles.buttonText}>Continue with Google</Text>
