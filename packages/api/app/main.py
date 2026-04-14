@@ -1,25 +1,23 @@
 from contextlib import asynccontextmanager
+from pathlib import Path
 
+from alembic import command
+from alembic.config import Config
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-import app.documents.models  # noqa: F401
-import app.highlights.models  # noqa: F401
-
-# Import models so SQLAlchemy registers them before create_all
-import app.users.models  # noqa: F401
 from app.documents import router as documents_router
 from app.highlights import router as highlights_router
 from app.shared import (
-    Base,
     DomainError,
-    db_engine,
     get_logger,
     get_settings,
     setup_logging,
 )
 from app.users import auth_router, users_router
+
+_ALEMBIC_DIR = Path(__file__).resolve().parent.parent / "alembic"
 
 settings = get_settings()
 setup_logging()
@@ -29,9 +27,9 @@ logger = get_logger()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("starting_up", app_name=settings.app_name, debug=settings.debug)
-    # Create tables on startup (use Alembic migrations in production)
-    async with db_engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+    cfg = Config()
+    cfg.set_main_option("script_location", str(_ALEMBIC_DIR))
+    command.upgrade(cfg, "head")
     yield
     logger.info("shutting_down")
 
