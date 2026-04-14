@@ -5,7 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.document_content_tree import DocumentContentTreeService
-from app.shared import StorageService, get_settings
+from app.shared import StorageService, get_logger, get_settings
 from app.users import User
 
 from .errors import (
@@ -19,6 +19,7 @@ from .parser_service import ParserService
 from .schemas import DocumentUpdateContent, DocumentUpdateSettings
 
 settings = get_settings()
+logger = get_logger()
 
 
 class DocumentService:
@@ -73,6 +74,10 @@ class DocumentService:
             yield "ready"
 
         except Exception as e:
+            logger.exception(
+                "document_processing_failed",
+                document_id=str(document_id),
+            )
             doc.status = DocumentStatus.FAILED
             doc.error_message = str(e)
             await self.db.commit()

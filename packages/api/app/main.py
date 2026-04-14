@@ -11,18 +11,29 @@ import app.highlights.models  # noqa: F401
 import app.users.models  # noqa: F401
 from app.documents import router as documents_router
 from app.highlights import router as highlights_router
-from app.shared import Base, DomainError, db_engine, get_settings
+from app.shared import (
+    Base,
+    DomainError,
+    db_engine,
+    get_logger,
+    get_settings,
+    setup_logging,
+)
 from app.users import auth_router, users_router
 
 settings = get_settings()
+setup_logging()
+logger = get_logger()
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    logger.info("starting_up", app_name=settings.app_name, debug=settings.debug)
     # Create tables on startup (use Alembic migrations in production)
     async with db_engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     yield
+    logger.info("shutting_down")
 
 
 app = FastAPI(

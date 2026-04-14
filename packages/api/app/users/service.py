@@ -15,13 +15,14 @@ from jose import jwt
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.shared import get_settings
+from app.shared import get_logger, get_settings
 
 from .errors import GoogleAuthError
 from .models import User
 from .schemas import GoogleAuthUrl, TokenResponse, UserUpdateSettings
 
 settings = get_settings()
+logger = get_logger()
 
 GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
 GOOGLE_USERINFO_URL = "https://www.googleapis.com/oauth2/v3/userinfo"
@@ -65,6 +66,7 @@ class UserService:
         try:
             google_info = await self._exchange_code_for_user_info(code, redirect_uri)
         except Exception as exc:
+            logger.exception("google_oauth_exchange_failed")
             raise GoogleAuthError() from exc
         user = await self._get_or_create_user(google_info)
         return TokenResponse(access_token=self._create_access_token(user.id))
@@ -95,7 +97,7 @@ class UserService:
 
     # ── Private helpers ──────────────────────────────────────────────────────
 
-    def _parse_oauth_state(state: str) -> tuple[str, str | None]:
+    def _parse_oauth_state(self, state: str) -> tuple[str, str | None]:
         """Extract (csrf_token, mobile_redirect | None) from state."""
         try:
             padded = state + "=" * (-len(state) % 4)

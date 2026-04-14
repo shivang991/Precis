@@ -8,8 +8,10 @@ import uuid
 import aioboto3
 
 from .config import get_settings
+from .logging import get_logger
 
 settings = get_settings()
+logger = get_logger()
 
 
 class StorageService:
@@ -40,16 +42,20 @@ class StorageService:
                 Body=file_bytes,
                 ContentType=content_type,
             )
+        logger.info("file_uploaded", storage_key=key, size_bytes=len(file_bytes))
         return key
 
     async def download_file(self, storage_key: str) -> bytes:
         async with self._client() as s3:
             response = await s3.get_object(Bucket=self._bucket, Key=storage_key)
-            return await response["Body"].read()
+            data = await response["Body"].read()
+        logger.info("file_downloaded", storage_key=storage_key, size_bytes=len(data))
+        return data
 
     async def delete_file(self, storage_key: str) -> None:
         async with self._client() as s3:
             await s3.delete_object(Bucket=self._bucket, Key=storage_key)
+        logger.info("file_deleted", storage_key=storage_key)
 
     async def get_presigned_url(self, storage_key: str, expires_in: int = 3600) -> str:
         async with self._client() as s3:
