@@ -8,6 +8,10 @@
     "lint": "ruff check app/ tests/",
     "lint:fix": "ruff check --fix app/ tests/",
     "format": "ruff format app/ tests/",
-    "format:check": "ruff format --check app/ tests/"
+    "format:check": "ruff format --check app/ tests/",
+    "migrate": "env/bin/python -m scripts.migrate upgrade head",
+    "migrate:generate": "env/bin/python -m scripts.migrate revision --autogenerate -m",
+    "migrate:downgrade": "env/bin/python -m scripts.migrate downgrade -1",
+    "migrate:history": "env/bin/python -m scripts.migrate history"
   }
 }
