@@ -28,7 +28,8 @@
     "scheme": "precis",
     "plugins": [
       "expo-router",
-      "expo-document-picker"
+      "expo-document-picker",
+      "expo-secure-store"
     ],
     "extra": {
       "apiBaseUrl": "https://precisapi.shivang991.com"
