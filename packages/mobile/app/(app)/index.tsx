@@ -33,7 +33,11 @@ export default function FilesListScreen() {
 
       const asset = result.assets[0];
       // React Native FormData accepts {uri, name, type} objects in place of Blob
-      const file = { uri: asset.uri, name: asset.name, type: "application/pdf" } as unknown as Blob;
+      const file = {
+        uri: asset.uri,
+        name: asset.name,
+        type: "application/pdf",
+      } as unknown as Blob;
       return api.uploadDocument({ file });
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["documents"] }),
