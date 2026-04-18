@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   View,
   ScrollView,
@@ -7,23 +7,22 @@ import {
   StyleSheet,
   Alert,
   ActivityIndicator,
-  Share,
 } from "react-native";
-import { useLocalSearchParams, useRouter, useNavigation } from "expo-router";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useApi } from "../../../hooks/useApi";
-import { useDocumentStore } from "../../../store/document";
 import { NodeRenderer } from "../../../components/document/NodeRenderer";
-import type { HighlightCreate } from "@precis/shared";
+import type { TextSelection } from "../../../components/document/HighlightableText";
+import type { HighlightCreate, HighlightRead } from "@precis/shared";
 
-const COLORS = ["yellow", "green", "blue", "pink", "purple"];
+const FLUSH_DEBOUNCE_MS = 500;
+const TEMP_ID_PREFIX = "temp_";
 
 export default function DocumentViewerScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const api = useApi();
   const qc = useQueryClient();
-  const { highlightMode, activeColor, setHighlightMode, setActiveColor } = useDocumentStore();
 
   const { data: document, isLoading: docLoading } = useQuery({
     queryKey: ["document", id],
@@ -37,14 +36,122 @@ export default function DocumentViewerScreen() {
     enabled: !!id && document?.status === "ready",
   });
 
-  const createHighlight = useMutation({
-    mutationFn: (data: HighlightCreate) => api.addHighlights(id, [data]),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["highlights", id] }),
-    onError: (e: any) => Alert.alert("Highlight failed", e.message),
-  });
+  const [selection, setSelection] = useState<TextSelection | null>(null);
 
-  const handleSelect = (nodeId: string, start: number, end: number) => {
-    createHighlight.mutate({ node_id: nodeId, start_offset: start, end_offset: end });
+  const handleSelectionChange = useCallback((sel: TextSelection) => {
+    if (sel.start === sel.end) {
+      setSelection((prev) => (prev && prev.nodeId === sel.nodeId ? null : prev));
+    } else {
+      setSelection(sel);
+    }
+  }, []);
+
+  const overlapping = useMemo(() => {
+    if (!selection) return [];
+    return highlights.filter(
+      (h) =>
+        h.node_id === selection.nodeId &&
+        h.start_offset != null &&
+        h.end_offset != null &&
+        h.start_offset < selection.end &&
+        h.end_offset > selection.start,
+    );
+  }, [selection, highlights]);
+
+  const pendingAddsRef = useRef<Array<{ create: HighlightCreate; tempId: string }>>([]);
+  const pendingRemovalsRef = useRef<string[]>([]);
+  const flushTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const flush = useCallback(async () => {
+    if (flushTimer.current) {
+      clearTimeout(flushTimer.current);
+      flushTimer.current = null;
+    }
+    const adds = pendingAddsRef.current;
+    const removals = pendingRemovalsRef.current;
+    if (adds.length === 0 && removals.length === 0) return;
+    pendingAddsRef.current = [];
+    pendingRemovalsRef.current = [];
+    try {
+      const tasks: Promise<unknown>[] = [];
+      if (adds.length) tasks.push(api.addHighlights(id, adds.map((a) => a.create)));
+      if (removals.length) tasks.push(api.removeHighlights(id, removals));
+      await Promise.all(tasks);
+      qc.invalidateQueries({ queryKey: ["highlights", id] });
+    } catch (e: any) {
+      qc.invalidateQueries({ queryKey: ["highlights", id] });
+      Alert.alert("Highlight sync failed", e?.message ?? "Unknown error");
+    }
+  }, [api, id, qc]);
+
+  const flushRef = useRef(flush);
+  flushRef.current = flush;
+
+  const scheduleFlush = useCallback(() => {
+    if (flushTimer.current) clearTimeout(flushTimer.current);
+    flushTimer.current = setTimeout(() => {
+      void flushRef.current();
+    }, FLUSH_DEBOUNCE_MS);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (flushTimer.current) clearTimeout(flushTimer.current);
+      void flushRef.current();
+    };
+  }, []);
+
+  const addHighlight = useCallback(
+    (sel: TextSelection) => {
+      const tempId = `${TEMP_ID_PREFIX}${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+      const now = new Date().toISOString();
+      const optimistic: HighlightRead = {
+        id: tempId,
+        document_id: id,
+        node_id: sel.nodeId,
+        start_offset: sel.start,
+        end_offset: sel.end,
+        created_at: now,
+        updated_at: now,
+      };
+      pendingAddsRef.current.push({
+        create: { node_id: sel.nodeId, start_offset: sel.start, end_offset: sel.end },
+        tempId,
+      });
+      qc.setQueryData<HighlightRead[]>(["highlights", id], (prev = []) => [...prev, optimistic]);
+      scheduleFlush();
+    },
+    [id, qc, scheduleFlush],
+  );
+
+  const removeHighlightsByIds = useCallback(
+    (ids: string[]) => {
+      if (ids.length === 0) return;
+      for (const hid of ids) {
+        if (hid.startsWith(TEMP_ID_PREFIX)) {
+          const idx = pendingAddsRef.current.findIndex((a) => a.tempId === hid);
+          if (idx >= 0) pendingAddsRef.current.splice(idx, 1);
+        } else {
+          pendingRemovalsRef.current.push(hid);
+        }
+      }
+      const idSet = new Set(ids);
+      qc.setQueryData<HighlightRead[]>(["highlights", id], (prev = []) =>
+        prev.filter((h) => !idSet.has(h.id)),
+      );
+      scheduleFlush();
+    },
+    [id, qc, scheduleFlush],
+  );
+
+  const handleFabPress = () => {
+    if (!selection) return;
+    if (overlapping.length > 0) {
+      removeHighlightsByIds(overlapping.map((h) => h.id));
+    } else {
+      addHighlight(selection);
+    }
+    setSelection(null);
   };
 
   if (docLoading) {
@@ -73,32 +180,12 @@ export default function DocumentViewerScreen() {
   }
 
   const nodes = document.document_content_tree?.nodes ?? [];
+  const fabVisible = selection != null;
+  const fabLabel = overlapping.length > 0 ? "Remove highlight" : "Add highlight";
 
   return (
     <View style={styles.container}>
-      {/* Toolbar */}
       <View style={styles.toolbar}>
-        <TouchableOpacity
-          style={[styles.toolBtn, highlightMode === "highlight" && styles.toolBtnActive]}
-          onPress={() => setHighlightMode(highlightMode === "view" ? "highlight" : "view")}
-        >
-          <Text style={[styles.toolBtnText, highlightMode === "highlight" && styles.toolBtnTextActive]}>
-            {highlightMode === "highlight" ? "Highlighting" : "Highlight"}
-          </Text>
-        </TouchableOpacity>
-
-        {highlightMode === "highlight" && (
-          <View style={styles.colorPicker}>
-            {COLORS.map((c) => (
-              <TouchableOpacity
-                key={c}
-                style={[styles.colorDot, { backgroundColor: colorHex(c) }, activeColor === c && styles.colorDotActive]}
-                onPress={() => setActiveColor(c)}
-              />
-            ))}
-          </View>
-        )}
-
         <TouchableOpacity
           style={styles.toolBtn}
           onPress={() => router.push(`/(app)/documents/${id}/summary`)}
@@ -118,20 +205,21 @@ export default function DocumentViewerScreen() {
         <NodeRenderer
           nodes={nodes}
           highlights={highlights}
-          highlightMode={highlightMode === "highlight"}
-          activeColor={activeColor}
-          onCreateHighlight={handleSelect}
+          onSelectionChange={handleSelectionChange}
         />
       </ScrollView>
+
+      {fabVisible && (
+        <TouchableOpacity
+          activeOpacity={0.85}
+          style={styles.fab}
+          onPress={handleFabPress}
+        >
+          <Text style={styles.fabText}>{fabLabel}</Text>
+        </TouchableOpacity>
+      )}
     </View>
   );
-}
-
-function colorHex(c: string): string {
-  const map: Record<string, string> = {
-    yellow: "#FFF176", green: "#C8E6C9", blue: "#BBDEFB", pink: "#F8BBD0", purple: "#E1BEE7",
-  };
-  return map[c] ?? "#FFF176";
 }
 
 const styles = StyleSheet.create({
@@ -154,12 +242,23 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#ccc",
   },
-  toolBtnActive: { backgroundColor: "#1a1a1a", borderColor: "#1a1a1a" },
   toolBtnText: { fontSize: 13, color: "#333" },
-  toolBtnTextActive: { color: "#fff" },
-  colorPicker: { flexDirection: "row", gap: 6, alignItems: "center" },
-  colorDot: { width: 22, height: 22, borderRadius: 11, borderWidth: 2, borderColor: "transparent" },
-  colorDotActive: { borderColor: "#333" },
   scroll: { flex: 1 },
-  content: { padding: 16, paddingBottom: 48 },
+  content: { padding: 16, paddingBottom: 96 },
+  fab: {
+    position: "absolute",
+    left: 20,
+    right: 20,
+    bottom: 24,
+    backgroundColor: "#1a1a1a",
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 6,
+  },
+  fabText: { color: "#fff", fontSize: 15, fontWeight: "600" },
 });

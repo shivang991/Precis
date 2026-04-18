@@ -1,23 +1,15 @@
 import React from "react";
 import { View, Text, StyleSheet } from "react-native";
 import type { DocumentContentTreeNodeOutput, HighlightRead } from "@precis/shared";
-import { HighlightableText } from "./HighlightableText";
+import { HighlightableText, TextSelection } from "./HighlightableText";
 
 interface NodeRendererProps {
   nodes: DocumentContentTreeNodeOutput[];
   highlights: HighlightRead[];
-  highlightMode: boolean;
-  activeColor: string;
-  onCreateHighlight: (nodeId: string, start: number, end: number) => void;
+  onSelectionChange: (sel: TextSelection) => void;
 }
 
-export function NodeRenderer({
-  nodes,
-  highlights,
-  highlightMode,
-  activeColor,
-  onCreateHighlight,
-}: NodeRendererProps) {
+export function NodeRenderer({ nodes, highlights, onSelectionChange }: NodeRendererProps) {
   return (
     <>
       {nodes.map((node) => (
@@ -25,9 +17,7 @@ export function NodeRenderer({
           key={node.id}
           node={node}
           highlights={highlights}
-          highlightMode={highlightMode}
-          activeColor={activeColor}
-          onCreateHighlight={onCreateHighlight}
+          onSelectionChange={onSelectionChange}
         />
       ))}
     </>
@@ -37,15 +27,11 @@ export function NodeRenderer({
 function RenderNode({
   node,
   highlights,
-  highlightMode,
-  activeColor,
-  onCreateHighlight,
+  onSelectionChange,
 }: {
   node: DocumentContentTreeNodeOutput;
   highlights: HighlightRead[];
-  highlightMode: boolean;
-  activeColor: string;
-  onCreateHighlight: (nodeId: string, start: number, end: number) => void;
+  onSelectionChange: (sel: TextSelection) => void;
 }) {
   const nodeHighlights = highlights.filter((h) => h.node_id === node.id);
 
@@ -60,9 +46,7 @@ function RenderNode({
             <NodeRenderer
               nodes={node.children}
               highlights={highlights}
-              highlightMode={highlightMode}
-              activeColor={activeColor}
-              onCreateHighlight={onCreateHighlight}
+              onSelectionChange={onSelectionChange}
             />
           )}
         </View>
@@ -75,9 +59,7 @@ function RenderNode({
             nodeId={node.id}
             text={node.text ?? ""}
             highlights={nodeHighlights}
-            highlightMode={highlightMode}
-            activeColor={activeColor}
-            onSelect={onCreateHighlight}
+            onSelectionChange={onSelectionChange}
           />
         </View>
       );
@@ -90,9 +72,7 @@ function RenderNode({
             nodeId={node.id}
             text={node.text ?? ""}
             highlights={nodeHighlights}
-            highlightMode={highlightMode}
-            activeColor={activeColor}
-            onSelect={onCreateHighlight}
+            onSelectionChange={onSelectionChange}
           />
         </View>
       );

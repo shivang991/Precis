@@ -1,126 +1,175 @@
-import React, { useRef } from "react";
-import { Text, StyleSheet, Platform } from "react-native";
+import React, { useState } from "react";
+import { Text, TextInput, StyleSheet } from "react-native";
 import type { HighlightRead } from "@precis/shared";
 
-const HIGHLIGHT_COLORS: Record<string, string> = {
-  yellow: "#FFF176",
-  green: "#C8E6C9",
-  blue: "#BBDEFB",
-  pink: "#F8BBD0",
-  purple: "#E1BEE7",
-};
+const HIGHLIGHT_YELLOW = "#FFF176";
+
+export interface TextSelection {
+  nodeId: string;
+  start: number;
+  end: number;
+}
 
 interface HighlightableTextProps {
   nodeId: string;
   text: string;
   highlights: HighlightRead[];
-  highlightMode: boolean;
-  activeColor: string;
-  onSelect: (nodeId: string, start: number, end: number) => void;
+  onSelectionChange: (sel: TextSelection) => void;
 }
 
-/**
- * Renders a text node with existing highlights shown as colored spans.
- * When highlightMode is active, the native text selection handles are used
- * to capture the selection range on selection end.
- */
 export function HighlightableText({
   nodeId,
   text,
   highlights,
-  highlightMode,
-  activeColor,
-  onSelect,
+  onSelectionChange,
 }: HighlightableTextProps) {
-  const selectionRef = useRef<{ start: number; end: number } | null>(null);
+  const [controlledSelection, setControlledSelection] = useState<
+    { start: number; end: number } | undefined
+  >(undefined);
+  const [activeSelection, setActiveSelection] = useState<
+    { start: number; end: number } | null
+  >(null);
 
-  // Build segments: merge highlight ranges into colored spans
-  const segments = buildSegments(text, highlights);
+  const segments = applySelectionMask(buildSegments(text, highlights), activeSelection);
 
-  if (!highlightMode) {
-    return (
-      <Text style={styles.text} selectable={false}>
-        {segments.map((seg, i) =>
-          seg.color ? (
-            <Text key={i} style={{ backgroundColor: HIGHLIGHT_COLORS[seg.color] ?? "#FFF176" }}>
-              {seg.text}
-            </Text>
-          ) : (
-            <Text key={i}>{seg.text}</Text>
-          )
-        )}
-      </Text>
-    );
-  }
+  const handleSelectionChange = (e: {
+    nativeEvent: { selection: { start: number; end: number } };
+  }) => {
+    const { start, end } = e.nativeEvent.selection;
+    if (start === end) {
+      const hit = findHighlightAt(highlights, start);
+      if (hit) {
+        const expanded = { start: hit.start_offset!, end: hit.end_offset! };
+        setControlledSelection(expanded);
+        return;
+      }
+      setActiveSelection(null);
+      setControlledSelection(undefined);
+      onSelectionChange({ nodeId, start, end });
+      return;
+    }
+    setActiveSelection({ start, end });
+    setControlledSelection(undefined);
+    onSelectionChange({ nodeId, start, end });
+  };
 
   return (
-    <Text
-      style={styles.text}
-      selectable
-      onSelectionChange={(e) => {
-        const { start, end } = e.nativeEvent.selection;
-        if (start !== end) {
-          selectionRef.current = { start, end };
-        }
-      }}
-      // On iOS/Android, fire highlight creation when user lifts finger after selection.
-      // We use onPress as a proxy — the selection change fires before the press.
-      onPress={() => {
-        const sel = selectionRef.current;
-        if (sel && sel.start !== sel.end) {
-          onSelect(nodeId, sel.start, sel.end);
-          selectionRef.current = null;
-        }
-      }}
+    <TextInput
+      multiline
+      scrollEnabled={false}
+      showSoftInputOnFocus={false}
+      caretHidden
+      spellCheck={false}
+      autoCorrect={false}
+      selection={controlledSelection}
+      style={[styles.text, styles.input]}
+      onSelectionChange={handleSelectionChange}
     >
       {segments.map((seg, i) =>
-        seg.color ? (
-          <Text key={i} style={{ backgroundColor: HIGHLIGHT_COLORS[seg.color] ?? "#FFF176" }}>
+        seg.highlighted ? (
+          <Text key={i} style={styles.highlighted}>
             {seg.text}
           </Text>
         ) : (
           <Text key={i}>{seg.text}</Text>
-        )
+        ),
       )}
-    </Text>
+    </TextInput>
   );
 }
 
 interface Segment {
   text: string;
-  color?: string;
+  start: number;
+  end: number;
+  highlighted?: boolean;
 }
 
 function buildSegments(text: string, highlights: HighlightRead[]): Segment[] {
-  if (highlights.length === 0) return [{ text }];
+  if (highlights.length === 0) return [{ text, start: 0, end: text.length }];
 
-  // Build a list of [start, end, color] ranges, sorted by start
   const ranges = highlights
     .filter((h) => h.start_offset != null && h.end_offset != null)
-    .map((h) => ({ start: h.start_offset!, end: h.end_offset!, color: "yellow" }))
+    .map((h) => ({ start: h.start_offset!, end: h.end_offset! }))
     .sort((a, b) => a.start - b.start);
 
   if (ranges.length === 0) {
-    // Node-level highlight (no offsets) — highlight the whole text
-    return [{ text, color: "yellow" }];
+    return [{ text, start: 0, end: text.length, highlighted: true }];
   }
 
   const segments: Segment[] = [];
   let cursor = 0;
-
   for (const range of ranges) {
     if (range.start > cursor) {
-      segments.push({ text: text.slice(cursor, range.start) });
+      segments.push({ text: text.slice(cursor, range.start), start: cursor, end: range.start });
     }
-    segments.push({ text: text.slice(range.start, range.end), color: range.color });
-    cursor = range.end;
+    const effectiveStart = Math.max(range.start, cursor);
+    if (range.end > effectiveStart) {
+      segments.push({
+        text: text.slice(effectiveStart, range.end),
+        start: effectiveStart,
+        end: range.end,
+        highlighted: true,
+      });
+    }
+    cursor = Math.max(cursor, range.end);
   }
-
   if (cursor < text.length) {
-    segments.push({ text: text.slice(cursor) });
+    segments.push({ text: text.slice(cursor), start: cursor, end: text.length });
   }
-
   return segments;
+}
+
+function applySelectionMask(
+  segments: Segment[],
+  selection: { start: number; end: number } | null,
+): Segment[] {
+  if (!selection) return segments;
+  const lo = Math.min(selection.start, selection.end);
+  const hi = Math.max(selection.start, selection.end);
+  if (lo === hi) return segments;
+
+  const out: Segment[] = [];
+  for (const seg of segments) {
+    if (!seg.highlighted || seg.end <= lo || seg.start >= hi) {
+      out.push(seg);
+      continue;
+    }
+    const overlapStart = Math.max(seg.start, lo);
+    const overlapEnd = Math.min(seg.end, hi);
+    if (seg.start < overlapStart) {
+      out.push({
+        text: seg.text.slice(0, overlapStart - seg.start),
+        start: seg.start,
+        end: overlapStart,
+        highlighted: true,
+      });
+    }
+    out.push({
+      text: seg.text.slice(overlapStart - seg.start, overlapEnd - seg.start),
+      start: overlapStart,
+      end: overlapEnd,
+    });
+    if (overlapEnd < seg.end) {
+      out.push({
+        text: seg.text.slice(overlapEnd - seg.start),
+        start: overlapEnd,
+        end: seg.end,
+        highlighted: true,
+      });
+    }
+  }
+  return out;
+}
+
+function findHighlightAt(highlights: HighlightRead[], pos: number): HighlightRead | undefined {
+  return highlights.find(
+    (h) =>
+      h.start_offset != null &&
+      h.end_offset != null &&
+      pos >= h.start_offset &&
+      pos <= h.end_offset,
+  );
 }
 
 const styles = StyleSheet.create({
@@ -128,5 +177,12 @@ const styles = StyleSheet.create({
     fontSize: 15,
     lineHeight: 24,
     color: "#1a1a1a",
+  },
+  input: {
+    padding: 0,
+    margin: 0,
+  },
+  highlighted: {
+    backgroundColor: HIGHLIGHT_YELLOW,
   },
 });
