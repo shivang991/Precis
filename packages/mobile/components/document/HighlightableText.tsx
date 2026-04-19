@@ -30,7 +30,7 @@ export function HighlightableText({
     { start: number; end: number } | null
   >(null);
 
-  const segments = applySelectionMask(buildSegments(text, highlights), activeSelection);
+  const segments = buildSegments(text, highlights, activeSelection);
 
   const handleSelectionChange = (e: {
     nativeEvent: { selection: { start: number; end: number } };
@@ -85,79 +85,52 @@ interface Segment {
   highlighted?: boolean;
 }
 
-function buildSegments(text: string, highlights: HighlightRead[]): Segment[] {
-  if (highlights.length === 0) return [{ text, start: 0, end: text.length }];
-
-  const ranges = highlights
-    .filter((h) => h.start_offset != null && h.end_offset != null)
-    .map((h) => ({ start: h.start_offset!, end: h.end_offset! }))
-    .sort((a, b) => a.start - b.start);
-
-  if (ranges.length === 0) {
-    return [{ text, start: 0, end: text.length, highlighted: true }];
-  }
-
-  const segments: Segment[] = [];
-  let cursor = 0;
-  for (const range of ranges) {
-    if (range.start > cursor) {
-      segments.push({ text: text.slice(cursor, range.start), start: cursor, end: range.start });
-    }
-    const effectiveStart = Math.max(range.start, cursor);
-    if (range.end > effectiveStart) {
-      segments.push({
-        text: text.slice(effectiveStart, range.end),
-        start: effectiveStart,
-        end: range.end,
-        highlighted: true,
-      });
-    }
-    cursor = Math.max(cursor, range.end);
-  }
-  if (cursor < text.length) {
-    segments.push({ text: text.slice(cursor), start: cursor, end: text.length });
-  }
-  return segments;
-}
-
-function applySelectionMask(
-  segments: Segment[],
+function buildSegments(
+  text: string,
+  highlights: HighlightRead[],
   selection: { start: number; end: number } | null,
 ): Segment[] {
-  if (!selection) return segments;
-  const lo = Math.min(selection.start, selection.end);
-  const hi = Math.max(selection.start, selection.end);
-  if (lo === hi) return segments;
+  const ranges = highlights
+    .filter((h) => h.start_offset != null && h.end_offset != null)
+    .map((h) => ({ start: h.start_offset!, end: h.end_offset! }));
+
+  const sel =
+    selection && selection.start !== selection.end
+      ? {
+          start: Math.min(selection.start, selection.end),
+          end: Math.max(selection.start, selection.end),
+        }
+      : null;
+
+  const clamp = (n: number) => Math.max(0, Math.min(text.length, n));
+  const boundaries = new Set<number>([0, text.length]);
+  for (const r of ranges) {
+    boundaries.add(clamp(r.start));
+    boundaries.add(clamp(r.end));
+  }
+  if (sel) {
+    boundaries.add(clamp(sel.start));
+    boundaries.add(clamp(sel.end));
+  }
+  const points = [...boundaries].sort((a, b) => a - b);
+
+  const inHighlight = (lo: number, hi: number) =>
+    ranges.some((r) => r.start < hi && r.end > lo);
+  const inSelection = (lo: number, hi: number) =>
+    !!sel && sel.start < hi && sel.end > lo;
 
   const out: Segment[] = [];
-  for (const seg of segments) {
-    if (!seg.highlighted || seg.end <= lo || seg.start >= hi) {
-      out.push(seg);
-      continue;
-    }
-    const overlapStart = Math.max(seg.start, lo);
-    const overlapEnd = Math.min(seg.end, hi);
-    if (seg.start < overlapStart) {
-      out.push({
-        text: seg.text.slice(0, overlapStart - seg.start),
-        start: seg.start,
-        end: overlapStart,
-        highlighted: true,
-      });
-    }
+  for (let i = 0; i < points.length - 1; i++) {
+    const lo = points[i];
+    const hi = points[i + 1];
+    if (lo === hi) continue;
+    const highlighted = inHighlight(lo, hi) && !inSelection(lo, hi);
     out.push({
-      text: seg.text.slice(overlapStart - seg.start, overlapEnd - seg.start),
-      start: overlapStart,
-      end: overlapEnd,
+      text: text.slice(lo, hi),
+      start: lo,
+      end: hi,
+      highlighted: highlighted || undefined,
     });
-    if (overlapEnd < seg.end) {
-      out.push({
-        text: seg.text.slice(overlapEnd - seg.start),
-        start: overlapEnd,
-        end: seg.end,
-        highlighted: true,
-      });
-    }
   }
   return out;
 }
