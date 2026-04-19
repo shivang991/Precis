@@ -7,9 +7,11 @@ interface NodeRendererProps {
   nodes: DocumentContentTreeNodeOutput[];
   highlights: HighlightRead[];
   onSelectionChange: (sel: TextSelection) => void;
+  disabled?: boolean;
+  activeSelectionNodeId?: string | null;
 }
 
-export function NodeRenderer({ nodes, highlights, onSelectionChange }: NodeRendererProps) {
+export function NodeRenderer({ nodes, highlights, onSelectionChange, disabled, activeSelectionNodeId }: NodeRendererProps) {
   return (
     <>
       {nodes.map((node) => (
@@ -18,6 +20,8 @@ export function NodeRenderer({ nodes, highlights, onSelectionChange }: NodeRende
           node={node}
           highlights={highlights}
           onSelectionChange={onSelectionChange}
+          disabled={disabled}
+          activeSelectionNodeId={activeSelectionNodeId}
         />
       ))}
     </>
@@ -28,10 +32,14 @@ function RenderNode({
   node,
   highlights,
   onSelectionChange,
+  disabled,
+  activeSelectionNodeId,
 }: {
   node: DocumentContentTreeNodeOutput;
   highlights: HighlightRead[];
   onSelectionChange: (sel: TextSelection) => void;
+  disabled?: boolean;
+  activeSelectionNodeId?: string | null;
 }) {
   const nodeHighlights = highlights.filter((h) => h.node_id === node.id);
 
@@ -47,6 +55,8 @@ function RenderNode({
               nodes={node.children}
               highlights={highlights}
               onSelectionChange={onSelectionChange}
+              disabled={disabled}
+              activeSelectionNodeId={activeSelectionNodeId}
             />
           )}
         </View>
@@ -60,6 +70,8 @@ function RenderNode({
             text={node.text ?? ""}
             highlights={nodeHighlights}
             onSelectionChange={onSelectionChange}
+            disabled={disabled}
+            activeSelectionNodeId={activeSelectionNodeId}
           />
         </View>
       );
@@ -73,6 +85,8 @@ function RenderNode({
             text={node.text ?? ""}
             highlights={nodeHighlights}
             onSelectionChange={onSelectionChange}
+            disabled={disabled}
+            activeSelectionNodeId={activeSelectionNodeId}
           />
         </View>
       );

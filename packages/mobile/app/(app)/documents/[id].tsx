@@ -37,6 +37,7 @@ export default function DocumentViewerScreen() {
   });
 
   const [selection, setSelection] = useState<TextSelection | null>(null);
+  const [highlighterOn, setHighlighterOn] = useState(true);
 
   const handleSelectionChange = useCallback((sel: TextSelection) => {
     if (sel.start === sel.end) {
@@ -57,6 +58,28 @@ export default function DocumentViewerScreen() {
         h.end_offset > selection.start,
     );
   }, [selection, highlights]);
+
+  // Classify the selection's coverage by existing highlights:
+  //   "none"    → no overlap → offer Add
+  //   "full"    → every char in the selection is highlighted → offer Remove
+  //   "partial" → some overlap but gaps remain → offer both
+  const coverage: "none" | "full" | "partial" = useMemo(() => {
+    if (!selection || overlapping.length === 0) return "none";
+    // Merge overlapping highlight ranges clipped to the selection, then check
+    // whether the union covers the whole selection without gaps.
+    const clipped = overlapping
+      .map((h) => ({
+        start: Math.max(h.start_offset!, selection.start),
+        end: Math.min(h.end_offset!, selection.end),
+      }))
+      .sort((a, b) => a.start - b.start);
+    let cursor = selection.start;
+    for (const r of clipped) {
+      if (r.start > cursor) return "partial"; // gap before this range
+      if (r.end > cursor) cursor = r.end;
+    }
+    return cursor >= selection.end ? "full" : "partial";
+  }, [selection, overlapping]);
 
   const pendingAddsRef = useRef<Array<{ create: HighlightCreate; tempId: string }>>([]);
   const pendingRemovalsRef = useRef<string[]>([]);
@@ -144,13 +167,30 @@ export default function DocumentViewerScreen() {
     [id, qc, scheduleFlush],
   );
 
-  const handleFabPress = () => {
+  const handleAddPress = () => {
     if (!selection) return;
-    if (overlapping.length > 0) {
-      removeHighlightsByIds(overlapping.map((h) => h.id));
-    } else {
-      addHighlight(selection);
+    addHighlight(selection);
+    setSelection(null);
+  };
+
+  const handleRemovePress = () => {
+    if (!selection) return;
+    // Partial removal: for each overlapping highlight, drop the original and
+    // re-add whatever sticks out on either side of the selection. This lets
+    // the user "erase" just the intersecting portion while preserving the
+    // rest of the original highlight(s).
+    const remainders: TextSelection[] = [];
+    for (const h of overlapping) {
+      if (h.start_offset == null || h.end_offset == null) continue;
+      if (h.start_offset < selection.start) {
+        remainders.push({ nodeId: selection.nodeId, start: h.start_offset, end: selection.start });
+      }
+      if (h.end_offset > selection.end) {
+        remainders.push({ nodeId: selection.nodeId, start: selection.end, end: h.end_offset });
+      }
     }
+    removeHighlightsByIds(overlapping.map((h) => h.id));
+    for (const r of remainders) addHighlight(r);
     setSelection(null);
   };
 
@@ -181,7 +221,9 @@ export default function DocumentViewerScreen() {
 
   const nodes = document.document_content_tree?.nodes ?? [];
   const fabVisible = selection != null;
-  const fabLabel = overlapping.length > 0 ? "Remove highlight" : "Add highlight";
+  // "none" → Add only, "full" → Remove only, "partial" → both side-by-side.
+  const showAdd = coverage !== "full";
+  const showRemove = coverage !== "none";
 
   return (
     <View style={styles.container}>
@@ -199,6 +241,18 @@ export default function DocumentViewerScreen() {
         >
           <Text style={styles.toolBtnText}>Settings</Text>
         </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.toolBtn}
+          onPress={() => {
+            setHighlighterOn((v) => {
+              if (v) setSelection(null);
+              return !v;
+            });
+          }}
+        >
+          <Text style={styles.toolBtnText}>Highlighter: {highlighterOn ? "On" : "Off"}</Text>
+        </TouchableOpacity>
       </View>
 
       <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
@@ -206,17 +260,32 @@ export default function DocumentViewerScreen() {
           nodes={nodes}
           highlights={highlights}
           onSelectionChange={handleSelectionChange}
+          disabled={!highlighterOn}
+          activeSelectionNodeId={selection?.nodeId ?? null}
         />
       </ScrollView>
 
       {fabVisible && (
-        <TouchableOpacity
-          activeOpacity={0.85}
-          style={styles.fab}
-          onPress={handleFabPress}
-        >
-          <Text style={styles.fabText}>{fabLabel}</Text>
-        </TouchableOpacity>
+        <View style={styles.fabRow}>
+          {showRemove && (
+            <TouchableOpacity
+              activeOpacity={0.85}
+              style={[styles.fab, styles.fabFlex]}
+              onPress={handleRemovePress}
+            >
+              <Text style={styles.fabText}>Remove highlight</Text>
+            </TouchableOpacity>
+          )}
+          {showAdd && (
+            <TouchableOpacity
+              activeOpacity={0.85}
+              style={[styles.fab, styles.fabFlex]}
+              onPress={handleAddPress}
+            >
+              <Text style={styles.fabText}>Add highlight</Text>
+            </TouchableOpacity>
+          )}
+        </View>
       )}
     </View>
   );
@@ -245,11 +314,15 @@ const styles = StyleSheet.create({
   toolBtnText: { fontSize: 13, color: "#333" },
   scroll: { flex: 1 },
   content: { padding: 16, paddingBottom: 96 },
-  fab: {
+  fabRow: {
     position: "absolute",
     left: 20,
     right: 20,
     bottom: 24,
+    flexDirection: "row",
+    gap: 12,
+  },
+  fab: {
     backgroundColor: "#1a1a1a",
     paddingVertical: 14,
     borderRadius: 12,
@@ -260,5 +333,6 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 4 },
     elevation: 6,
   },
+  fabFlex: { flex: 1 },
   fabText: { color: "#fff", fontSize: 15, fontWeight: "600" },
 });

@@ -1,8 +1,26 @@
-import React, { useState } from "react";
-import { Text, TextInput, StyleSheet } from "react-native";
+import React, { useMemo, useState, useCallback, useEffect } from "react";
+import { View, StyleSheet, LayoutChangeEvent } from "react-native";
+import {
+  Canvas,
+  Paragraph,
+  Rect,
+  Skia,
+  TextAlign,
+  FontStyle,
+  SkParagraph,
+} from "@shopify/react-native-skia";
+import { Gesture, GestureDetector } from "react-native-gesture-handler";
+import { scheduleOnRN } from "react-native-worklets";
 import type { HighlightRead } from "@precis/shared";
 
 const HIGHLIGHT_YELLOW = "#FFF176";
+const SELECTION_BLUE = "rgba(0, 122, 255, 0.35)";
+const HANDLE_COLOR = "#007AFF";
+const HANDLE_SIZE = 14;
+const HANDLE_HIT_SLOP = 40;
+const FONT_SIZE = 15;
+const LINE_HEIGHT = 24;
+const TEXT_COLOR = "#1a1a1a";
 
 export interface TextSelection {
   nodeId: string;
@@ -15,6 +33,10 @@ interface HighlightableTextProps {
   text: string;
   highlights: HighlightRead[];
   onSelectionChange: (sel: TextSelection) => void;
+  disabled?: boolean;
+  // The id of the node that currently owns the one allowed selection.
+  // If this doesn't match `nodeId`, this component drops its local selection.
+  activeSelectionNodeId?: string | null;
 }
 
 export function HighlightableText({
@@ -22,140 +44,334 @@ export function HighlightableText({
   text,
   highlights,
   onSelectionChange,
+  disabled = false,
+  activeSelectionNodeId = null,
 }: HighlightableTextProps) {
-  const [controlledSelection, setControlledSelection] = useState<
-    { start: number; end: number } | undefined
-  >(undefined);
-  const [activeSelection, setActiveSelection] = useState<
-    { start: number; end: number } | null
-  >(null);
+  const [width, setWidth] = useState(0);
+  const [selection, setSelection] = useState<{
+    start: number;
+    end: number;
+  } | null>(null);
 
-  const segments = buildSegments(text, highlights, activeSelection);
+  useEffect(() => {
+    if (disabled) setSelection(null);
+  }, [disabled]);
 
-  const handleSelectionChange = (e: {
-    nativeEvent: { selection: { start: number; end: number } };
-  }) => {
-    const { start, end } = e.nativeEvent.selection;
-    if (start === end) {
-      const hit = findHighlightAt(highlights, start);
-      if (hit) {
-        const expanded = { start: hit.start_offset!, end: hit.end_offset! };
-        setControlledSelection(expanded);
+  // Enforce single-selection across all nodes: if another node becomes the
+  // active selection owner, drop ours.
+  useEffect(() => {
+    if (activeSelectionNodeId != null && activeSelectionNodeId !== nodeId) {
+      setSelection(null);
+    }
+  }, [activeSelectionNodeId, nodeId]);
+
+  const paragraph = useMemo<SkParagraph | null>(() => {
+    if (!width) return null;
+    const style = {
+      textAlign: TextAlign.Left,
+    };
+    const textStyle = {
+      color: Skia.Color(TEXT_COLOR),
+      fontSize: FONT_SIZE,
+      heightMultiplier: LINE_HEIGHT / FONT_SIZE,
+      fontStyle: FontStyle.Normal,
+    };
+    const builder = Skia.ParagraphBuilder.Make(style);
+    builder.pushStyle(textStyle);
+    builder.addText(text);
+    builder.pop();
+    const p = builder.build();
+    p.layout(width);
+    return p;
+  }, [text, width]);
+
+  const height = paragraph ? paragraph.getHeight() : LINE_HEIGHT;
+
+  const highlightRects = useMemo(() => {
+    if (!paragraph) return [];
+    const rects: { x: number; y: number; width: number; height: number }[] = [];
+    for (const h of highlights) {
+      if (h.start_offset == null || h.end_offset == null) continue;
+      const rs = paragraph.getRectsForRange(h.start_offset, h.end_offset);
+      for (const r of rs) rects.push(r);
+    }
+    return rects;
+  }, [paragraph, highlights]);
+
+  const selectionRects = useMemo(() => {
+    if (!paragraph || !selection) return [];
+    const lo = Math.min(selection.start, selection.end);
+    const hi = Math.max(selection.start, selection.end);
+    if (lo === hi) return [];
+    return paragraph.getRectsForRange(lo, hi);
+  }, [paragraph, selection]);
+
+  const hitTest = useCallback(
+    (x: number, y: number): number => {
+      if (!paragraph) return 0;
+      return paragraph.getGlyphPositionAtCoordinate(x, y);
+    },
+    [paragraph],
+  );
+
+  const emit = useCallback(
+    (start: number, end: number) => {
+      const lo = Math.min(start, end);
+      const hi = Math.max(start, end);
+      onSelectionChange({ nodeId, start: lo, end: hi });
+    },
+    [nodeId, onSelectionChange],
+  );
+
+  const findHighlightAt = useCallback(
+    (pos: number) => {
+      return highlights.find(
+        (h) =>
+          h.start_offset != null &&
+          h.end_offset != null &&
+          pos >= h.start_offset &&
+          pos <= h.end_offset,
+      );
+    },
+    [highlights],
+  );
+
+  const handleTap = useCallback(
+    (x: number, y: number) => {
+      const pos = hitTest(x, y);
+      const hit = findHighlightAt(pos);
+      if (hit && hit.start_offset != null && hit.end_offset != null) {
+        setSelection({ start: hit.start_offset, end: hit.end_offset });
+        emit(hit.start_offset, hit.end_offset);
         return;
       }
-      setActiveSelection(null);
-      setControlledSelection(undefined);
-      onSelectionChange({ nodeId, start, end });
-      return;
-    }
-    setActiveSelection({ start, end });
-    setControlledSelection(undefined);
-    onSelectionChange({ nodeId, start, end });
+      const word = wordBoundsAt(text, pos);
+      if (word.start !== word.end) {
+        setSelection(word);
+        emit(word.start, word.end);
+      } else {
+        setSelection(null);
+        emit(pos, pos);
+      }
+    },
+    [hitTest, findHighlightAt, emit, text],
+  );
+
+  const handleDragStart = useCallback(
+    (x: number, y: number) => {
+      const pos = hitTest(x, y);
+      const word = wordBoundsAt(text, pos);
+      setSelection(word);
+    },
+    [hitTest, text],
+  );
+
+  const handleDragUpdate = useCallback(
+    (x: number, y: number) => {
+      const pos = hitTest(x, y);
+      setSelection((prev) => {
+        if (!prev) return { start: pos, end: pos };
+        const anchor = pos >= prev.end ? prev.start : prev.end;
+        return { start: anchor, end: pos };
+      });
+    },
+    [hitTest],
+  );
+
+  const selectionRef = React.useRef<{ start: number; end: number } | null>(
+    null,
+  );
+  selectionRef.current = selection;
+
+  const handleDragEnd = useCallback(() => {
+    const sel = selectionRef.current;
+    if (sel) emit(sel.start, sel.end);
+  }, [emit]);
+
+  const handleAnchors = useMemo(() => {
+    if (selectionRects.length === 0) return null;
+    const first = selectionRects[0];
+    const last = selectionRects[selectionRects.length - 1];
+    return {
+      left: { x: first.x, y: first.y + first.height },
+      right: { x: last.x + last.width, y: last.y + last.height },
+    };
+  }, [selectionRects]);
+
+  const handleAnchorRef = React.useRef<{ x: number; y: number } | null>(null);
+
+  const handleStartLeft = useCallback(() => {
+    handleAnchorRef.current = handleAnchors?.left ?? null;
+  }, [handleAnchors]);
+
+  const handleStartRight = useCallback(() => {
+    handleAnchorRef.current = handleAnchors?.right ?? null;
+  }, [handleAnchors]);
+
+  const handleMove = useCallback(
+    (which: "left" | "right", tx: number, ty: number) => {
+      const anchor = handleAnchorRef.current;
+      if (!anchor) return;
+      const px = anchor.x + tx;
+      const py = anchor.y + ty - LINE_HEIGHT / 2;
+      const pos = hitTest(px, py);
+      setSelection((prev) => {
+        if (!prev) return prev;
+        if (which === "left") {
+          return pos < prev.end
+            ? { start: pos, end: prev.end }
+            : { start: prev.end, end: pos };
+        }
+        return pos > prev.start
+          ? { start: prev.start, end: pos }
+          : { start: pos, end: prev.start };
+      });
+    },
+    [hitTest],
+  );
+
+  const handleEnd = useCallback(() => {
+    const sel = selectionRef.current;
+    if (sel) emit(sel.start, sel.end);
+  }, [emit]);
+
+  const leftHandleGesture = Gesture.Pan()
+    .onStart(() => {
+      scheduleOnRN(handleStartLeft);
+    })
+    .onUpdate((e) => {
+      scheduleOnRN(handleMove, "left", e.translationX, e.translationY);
+    })
+    .onEnd(() => {
+      scheduleOnRN(handleEnd);
+    });
+
+  const rightHandleGesture = Gesture.Pan()
+    .onStart(() => {
+      scheduleOnRN(handleStartRight);
+    })
+    .onUpdate((e) => {
+      scheduleOnRN(handleMove, "right", e.translationX, e.translationY);
+    })
+    .onEnd(() => {
+      scheduleOnRN(handleEnd);
+    });
+
+  const tap = Gesture.Tap()
+    .enabled(!disabled)
+    .onEnd((e) => {
+      scheduleOnRN(handleTap, e.x, e.y);
+    });
+
+  const pan = Gesture.Pan()
+    .enabled(!disabled)
+    .activateAfterLongPress(250)
+    .onStart((e) => {
+      scheduleOnRN(handleDragStart, e.x, e.y);
+    })
+    .onUpdate((e) => {
+      scheduleOnRN(handleDragUpdate, e.x, e.y);
+    })
+    .onEnd(() => {
+      scheduleOnRN(handleDragEnd);
+    });
+
+  const gesture = Gesture.Exclusive(pan, tap);
+
+  const onLayout = (e: LayoutChangeEvent) => {
+    const w = e.nativeEvent.layout.width;
+    if (w && w !== width) setWidth(w);
   };
 
   return (
-    <TextInput
-      multiline
-      scrollEnabled={false}
-      showSoftInputOnFocus={false}
-      caretHidden
-      spellCheck={false}
-      autoCorrect={false}
-      selection={controlledSelection}
-      style={[styles.text, styles.input]}
-      onSelectionChange={handleSelectionChange}
-    >
-      {segments.map((seg, i) =>
-        seg.highlighted ? (
-          <Text key={i} style={styles.highlighted}>
-            {seg.text}
-          </Text>
-        ) : (
-          <Text key={i}>{seg.text}</Text>
-        ),
+    <View style={styles.wrapper} onLayout={onLayout}>
+      <GestureDetector gesture={gesture}>
+        <Canvas style={{ width: "100%", height }}>
+          {highlightRects.map((r, i) => (
+            <Rect
+              key={`h-${i}`}
+              x={r.x}
+              y={r.y}
+              width={r.width}
+              height={r.height}
+              color={HIGHLIGHT_YELLOW}
+            />
+          ))}
+          {selectionRects.map((r, i) => (
+            <Rect
+              key={`s-${i}`}
+              x={r.x}
+              y={r.y}
+              width={r.width}
+              height={r.height}
+              color={SELECTION_BLUE}
+            />
+          ))}
+          {paragraph && (
+            <Paragraph paragraph={paragraph} x={0} y={0} width={width} />
+          )}
+        </Canvas>
+      </GestureDetector>
+      {handleAnchors && !disabled && (
+        <>
+          <GestureDetector gesture={leftHandleGesture}>
+            <View
+              hitSlop={HANDLE_HIT_SLOP}
+              style={[
+                styles.handle,
+                {
+                  left: handleAnchors.left.x - HANDLE_SIZE / 2,
+                  top: handleAnchors.left.y - HANDLE_SIZE / 2,
+                },
+              ]}
+            />
+          </GestureDetector>
+          <GestureDetector gesture={rightHandleGesture}>
+            <View
+              hitSlop={HANDLE_HIT_SLOP}
+              style={[
+                styles.handle,
+                {
+                  left: handleAnchors.right.x - HANDLE_SIZE / 2,
+                  top: handleAnchors.right.y - HANDLE_SIZE / 2,
+                },
+              ]}
+            />
+          </GestureDetector>
+        </>
       )}
-    </TextInput>
+    </View>
   );
 }
 
-interface Segment {
-  text: string;
-  start: number;
-  end: number;
-  highlighted?: boolean;
-}
-
-function buildSegments(
+function wordBoundsAt(
   text: string,
-  highlights: HighlightRead[],
-  selection: { start: number; end: number } | null,
-): Segment[] {
-  const ranges = highlights
-    .filter((h) => h.start_offset != null && h.end_offset != null)
-    .map((h) => ({ start: h.start_offset!, end: h.end_offset! }));
-
-  const sel =
-    selection && selection.start !== selection.end
-      ? {
-          start: Math.min(selection.start, selection.end),
-          end: Math.max(selection.start, selection.end),
-        }
-      : null;
-
-  const clamp = (n: number) => Math.max(0, Math.min(text.length, n));
-  const boundaries = new Set<number>([0, text.length]);
-  for (const r of ranges) {
-    boundaries.add(clamp(r.start));
-    boundaries.add(clamp(r.end));
+  pos: number,
+): { start: number; end: number } {
+  const isWord = (c: string) => /\S/.test(c);
+  const n = text.length;
+  if (n === 0) return { start: 0, end: 0 };
+  let p = Math.max(0, Math.min(n, pos));
+  if (p === n || !isWord(text[p])) {
+    if (p > 0 && isWord(text[p - 1])) p = p - 1;
+    else return { start: p, end: p };
   }
-  if (sel) {
-    boundaries.add(clamp(sel.start));
-    boundaries.add(clamp(sel.end));
-  }
-  const points = [...boundaries].sort((a, b) => a - b);
-
-  const inHighlight = (lo: number, hi: number) =>
-    ranges.some((r) => r.start < hi && r.end > lo);
-  const inSelection = (lo: number, hi: number) =>
-    !!sel && sel.start < hi && sel.end > lo;
-
-  const out: Segment[] = [];
-  for (let i = 0; i < points.length - 1; i++) {
-    const lo = points[i];
-    const hi = points[i + 1];
-    if (lo === hi) continue;
-    const highlighted = inHighlight(lo, hi) && !inSelection(lo, hi);
-    out.push({
-      text: text.slice(lo, hi),
-      start: lo,
-      end: hi,
-      highlighted: highlighted || undefined,
-    });
-  }
-  return out;
-}
-
-function findHighlightAt(highlights: HighlightRead[], pos: number): HighlightRead | undefined {
-  return highlights.find(
-    (h) =>
-      h.start_offset != null &&
-      h.end_offset != null &&
-      pos >= h.start_offset &&
-      pos <= h.end_offset,
-  );
+  let start = p;
+  while (start > 0 && isWord(text[start - 1])) start--;
+  let end = p;
+  while (end < n && isWord(text[end])) end++;
+  return { start, end };
 }
 
 const styles = StyleSheet.create({
-  text: {
-    fontSize: 15,
-    lineHeight: 24,
-    color: "#1a1a1a",
+  wrapper: {
+    width: "100%",
   },
-  input: {
-    padding: 0,
-    margin: 0,
-  },
-  highlighted: {
-    backgroundColor: HIGHLIGHT_YELLOW,
+  handle: {
+    position: "absolute",
+    width: HANDLE_SIZE,
+    height: HANDLE_SIZE,
+    borderRadius: HANDLE_SIZE / 2,
+    backgroundColor: HANDLE_COLOR,
   },
 });
