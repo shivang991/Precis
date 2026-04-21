@@ -12,11 +12,18 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useApi } from "../../../hooks/useApi";
 import { NodeRenderer } from "../../../components/document/NodeRenderer";
-import type { TextSelection } from "../../../components/document/HighlightableText";
+import {
+  SelectionProvider,
+  SelectionProviderHandle,
+  NormalizedSelection,
+  NodeSlice,
+} from "../../../components/document/SelectionProvider";
 import type { HighlightCreate, HighlightRead } from "@precis/shared";
 
 const FLUSH_DEBOUNCE_MS = 500;
 const TEMP_ID_PREFIX = "temp_";
+
+type Remainder = { nodeId: string; start: number; end: number };
 
 export default function DocumentViewerScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -36,50 +43,64 @@ export default function DocumentViewerScreen() {
     enabled: !!id && document?.status === "ready",
   });
 
-  const [selection, setSelection] = useState<TextSelection | null>(null);
+  const [selection, setSelection] = useState<NormalizedSelection | null>(null);
   const [highlighterOn, setHighlighterOn] = useState(true);
+  const selectionProviderRef = useRef<SelectionProviderHandle>(null);
 
-  const handleSelectionChange = useCallback((sel: TextSelection) => {
-    if (sel.start === sel.end) {
-      setSelection((prev) => (prev && prev.nodeId === sel.nodeId ? null : prev));
-    } else {
-      setSelection(sel);
-    }
+  const handleSelectionChange = useCallback((sel: NormalizedSelection | null) => {
+    setSelection(sel);
   }, []);
 
-  const overlapping = useMemo(() => {
-    if (!selection) return [];
-    return highlights.filter(
-      (h) =>
-        h.node_id === selection.nodeId &&
-        h.start_offset != null &&
-        h.end_offset != null &&
-        h.start_offset < selection.end &&
-        h.end_offset > selection.start,
-    );
+  // Per-slice overlap with existing highlights.
+  const overlappingByNode = useMemo(() => {
+    if (!selection) return [] as Array<{ slice: NodeSlice; overs: HighlightRead[] }>;
+    return selection.slices.map((slice) => ({
+      slice,
+      overs: highlights.filter(
+        (h) =>
+          h.node_id === slice.nodeId &&
+          h.start_offset != null &&
+          h.end_offset != null &&
+          h.start_offset < slice.end &&
+          h.end_offset > slice.start,
+      ),
+    }));
   }, [selection, highlights]);
 
-  // Classify the selection's coverage by existing highlights:
-  //   "none"    → no overlap → offer Add
-  //   "full"    → every char in the selection is highlighted → offer Remove
-  //   "partial" → some overlap but gaps remain → offer both
+  // Aggregate coverage over all slices:
+  //   "none"    → no slice has any overlap
+  //   "full"    → every slice is fully covered
+  //   "partial" → some overlap but at least one gap
   const coverage: "none" | "full" | "partial" = useMemo(() => {
-    if (!selection || overlapping.length === 0) return "none";
-    // Merge overlapping highlight ranges clipped to the selection, then check
-    // whether the union covers the whole selection without gaps.
-    const clipped = overlapping
-      .map((h) => ({
-        start: Math.max(h.start_offset!, selection.start),
-        end: Math.min(h.end_offset!, selection.end),
-      }))
-      .sort((a, b) => a.start - b.start);
-    let cursor = selection.start;
-    for (const r of clipped) {
-      if (r.start > cursor) return "partial"; // gap before this range
-      if (r.end > cursor) cursor = r.end;
+    if (!selection || overlappingByNode.length === 0) return "none";
+    let anyOverlap = false;
+    let anyGap = false;
+    for (const { slice, overs } of overlappingByNode) {
+      if (overs.length === 0) {
+        anyGap = true;
+        continue;
+      }
+      anyOverlap = true;
+      const clipped = overs
+        .map((h) => ({
+          start: Math.max(h.start_offset!, slice.start),
+          end: Math.min(h.end_offset!, slice.end),
+        }))
+        .sort((a, b) => a.start - b.start);
+      let cursor = slice.start;
+      for (const r of clipped) {
+        if (r.start > cursor) {
+          anyGap = true;
+          break;
+        }
+        if (r.end > cursor) cursor = r.end;
+      }
+      if (cursor < slice.end) anyGap = true;
     }
-    return cursor >= selection.end ? "full" : "partial";
-  }, [selection, overlapping]);
+    if (!anyOverlap) return "none";
+    if (!anyGap) return "full";
+    return "partial";
+  }, [selection, overlappingByNode]);
 
   const pendingAddsRef = useRef<Array<{ create: HighlightCreate; tempId: string }>>([]);
   const pendingRemovalsRef = useRef<string[]>([]);
@@ -125,20 +146,20 @@ export default function DocumentViewerScreen() {
   }, []);
 
   const addHighlight = useCallback(
-    (sel: TextSelection) => {
+    (r: { nodeId: string; start: number; end: number }) => {
       const tempId = `${TEMP_ID_PREFIX}${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
       const now = new Date().toISOString();
       const optimistic: HighlightRead = {
         id: tempId,
         document_id: id,
-        node_id: sel.nodeId,
-        start_offset: sel.start,
-        end_offset: sel.end,
+        node_id: r.nodeId,
+        start_offset: r.start,
+        end_offset: r.end,
         created_at: now,
         updated_at: now,
       };
       pendingAddsRef.current.push({
-        create: { node_id: sel.nodeId, start_offset: sel.start, end_offset: sel.end },
+        create: { node_id: r.nodeId, start_offset: r.start, end_offset: r.end },
         tempId,
       });
       qc.setQueryData<HighlightRead[]>(["highlights", id], (prev = []) => [...prev, optimistic]);
@@ -167,31 +188,40 @@ export default function DocumentViewerScreen() {
     [id, qc, scheduleFlush],
   );
 
+  const clearUiSelection = () => {
+    selectionProviderRef.current?.clear();
+    setSelection(null);
+  };
+
   const handleAddPress = () => {
     if (!selection) return;
-    addHighlight(selection);
-    setSelection(null);
+    for (const slice of selection.slices) {
+      addHighlight({ nodeId: slice.nodeId, start: slice.start, end: slice.end });
+    }
+    clearUiSelection();
   };
 
   const handleRemovePress = () => {
     if (!selection) return;
-    // Partial removal: for each overlapping highlight, drop the original and
-    // re-add whatever sticks out on either side of the selection. This lets
-    // the user "erase" just the intersecting portion while preserving the
-    // rest of the original highlight(s).
-    const remainders: TextSelection[] = [];
-    for (const h of overlapping) {
-      if (h.start_offset == null || h.end_offset == null) continue;
-      if (h.start_offset < selection.start) {
-        remainders.push({ nodeId: selection.nodeId, start: h.start_offset, end: selection.start });
-      }
-      if (h.end_offset > selection.end) {
-        remainders.push({ nodeId: selection.nodeId, start: selection.end, end: h.end_offset });
+    // For each slice, drop overlapping highlights and re-add the parts that
+    // stick out beyond the slice so only the intersecting portion is erased.
+    const remainders: Remainder[] = [];
+    const idsToRemove: string[] = [];
+    for (const { slice, overs } of overlappingByNode) {
+      for (const h of overs) {
+        if (h.start_offset == null || h.end_offset == null) continue;
+        idsToRemove.push(h.id);
+        if (h.start_offset < slice.start) {
+          remainders.push({ nodeId: slice.nodeId, start: h.start_offset, end: slice.start });
+        }
+        if (h.end_offset > slice.end) {
+          remainders.push({ nodeId: slice.nodeId, start: slice.end, end: h.end_offset });
+        }
       }
     }
-    removeHighlightsByIds(overlapping.map((h) => h.id));
+    removeHighlightsByIds(idsToRemove);
     for (const r of remainders) addHighlight(r);
-    setSelection(null);
+    clearUiSelection();
   };
 
   if (docLoading) {
@@ -221,7 +251,6 @@ export default function DocumentViewerScreen() {
 
   const nodes = document.document_content_tree?.nodes ?? [];
   const fabVisible = selection != null;
-  // "none" → Add only, "full" → Remove only, "partial" → both side-by-side.
   const showAdd = coverage !== "full";
   const showRemove = coverage !== "none";
 
@@ -245,10 +274,7 @@ export default function DocumentViewerScreen() {
         <TouchableOpacity
           style={styles.toolBtn}
           onPress={() => {
-            setHighlighterOn((v) => {
-              if (v) setSelection(null);
-              return !v;
-            });
+            setHighlighterOn((v) => !v);
           }}
         >
           <Text style={styles.toolBtnText}>Highlighter: {highlighterOn ? "On" : "Off"}</Text>
@@ -256,13 +282,13 @@ export default function DocumentViewerScreen() {
       </View>
 
       <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
-        <NodeRenderer
-          nodes={nodes}
-          highlights={highlights}
-          onSelectionChange={handleSelectionChange}
+        <SelectionProvider
+          ref={selectionProviderRef}
           disabled={!highlighterOn}
-          activeSelectionNodeId={selection?.nodeId ?? null}
-        />
+          onSelectionChange={handleSelectionChange}
+        >
+          <NodeRenderer nodes={nodes} highlights={highlights} />
+        </SelectionProvider>
       </ScrollView>
 
       {fabVisible && (

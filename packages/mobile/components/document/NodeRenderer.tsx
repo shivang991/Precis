@@ -1,28 +1,18 @@
 import React from "react";
 import { View, Text, StyleSheet } from "react-native";
 import type { DocumentContentTreeNodeOutput, HighlightRead } from "@precis/shared";
-import { HighlightableText, TextSelection } from "./HighlightableText";
+import { HighlightableText } from "./HighlightableText";
 
 interface NodeRendererProps {
   nodes: DocumentContentTreeNodeOutput[];
   highlights: HighlightRead[];
-  onSelectionChange: (sel: TextSelection) => void;
-  disabled?: boolean;
-  activeSelectionNodeId?: string | null;
 }
 
-export function NodeRenderer({ nodes, highlights, onSelectionChange, disabled, activeSelectionNodeId }: NodeRendererProps) {
+export function NodeRenderer({ nodes, highlights }: NodeRendererProps) {
   return (
     <>
       {nodes.map((node) => (
-        <RenderNode
-          key={node.id}
-          node={node}
-          highlights={highlights}
-          onSelectionChange={onSelectionChange}
-          disabled={disabled}
-          activeSelectionNodeId={activeSelectionNodeId}
-        />
+        <RenderNode key={node.id} node={node} highlights={highlights} />
       ))}
     </>
   );
@@ -31,15 +21,9 @@ export function NodeRenderer({ nodes, highlights, onSelectionChange, disabled, a
 function RenderNode({
   node,
   highlights,
-  onSelectionChange,
-  disabled,
-  activeSelectionNodeId,
 }: {
   node: DocumentContentTreeNodeOutput;
   highlights: HighlightRead[];
-  onSelectionChange: (sel: TextSelection) => void;
-  disabled?: boolean;
-  activeSelectionNodeId?: string | null;
 }) {
   const nodeHighlights = highlights.filter((h) => h.node_id === node.id);
 
@@ -51,13 +35,7 @@ function RenderNode({
             {node.text}
           </Text>
           {node.children && node.children.length > 0 && (
-            <NodeRenderer
-              nodes={node.children}
-              highlights={highlights}
-              onSelectionChange={onSelectionChange}
-              disabled={disabled}
-              activeSelectionNodeId={activeSelectionNodeId}
-            />
+            <NodeRenderer nodes={node.children} highlights={highlights} />
           )}
         </View>
       );
@@ -69,9 +47,6 @@ function RenderNode({
             nodeId={node.id}
             text={node.text ?? ""}
             highlights={nodeHighlights}
-            onSelectionChange={onSelectionChange}
-            disabled={disabled}
-            activeSelectionNodeId={activeSelectionNodeId}
           />
         </View>
       );
@@ -84,9 +59,6 @@ function RenderNode({
             nodeId={node.id}
             text={node.text ?? ""}
             highlights={nodeHighlights}
-            onSelectionChange={onSelectionChange}
-            disabled={disabled}
-            activeSelectionNodeId={activeSelectionNodeId}
           />
         </View>
       );
