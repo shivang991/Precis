@@ -65,7 +65,7 @@ class DocumentService:
 
             doc.document_content_tree = DocumentContentTreeService.build_document(
                 title=doc.title,
-                nodes=parsed_pdf.nodes,
+                nodes=DocumentContentTreeService.nest(parsed_pdf.nodes),
                 source=doc.source.value,
                 page_count=parsed_pdf.page_count,
             )
