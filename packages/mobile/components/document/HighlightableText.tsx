@@ -16,21 +16,28 @@ import { useSelection, useSelectionSlice, wordBoundsAt } from "./SelectionProvid
 
 const HIGHLIGHT_YELLOW = "#FFF176";
 const SELECTION_BLUE = "rgba(0, 122, 255, 0.35)";
-const FONT_SIZE = 15;
-const LINE_HEIGHT = 24;
+const DEFAULT_FONT_SIZE = 15;
+const DEFAULT_LINE_HEIGHT = 24;
 const TEXT_COLOR = "#1a1a1a";
 
 interface HighlightableTextProps {
   nodeId: string;
   text: string;
   highlights: HighlightRead[];
+  fontSize?: number;
+  lineHeight?: number;
+  bold?: boolean;
 }
 
 export function HighlightableText({
   nodeId,
   text,
   highlights,
+  fontSize = DEFAULT_FONT_SIZE,
+  lineHeight,
+  bold = false,
 }: HighlightableTextProps) {
+  const resolvedLineHeight = lineHeight ?? Math.round(fontSize * (DEFAULT_LINE_HEIGHT / DEFAULT_FONT_SIZE));
   const {
     registerNode,
     unregisterNode,
@@ -48,9 +55,9 @@ export function HighlightableText({
     const style = { textAlign: TextAlign.Left };
     const textStyle = {
       color: Skia.Color(TEXT_COLOR),
-      fontSize: FONT_SIZE,
-      heightMultiplier: LINE_HEIGHT / FONT_SIZE,
-      fontStyle: FontStyle.Normal,
+      fontSize,
+      heightMultiplier: resolvedLineHeight / fontSize,
+      fontStyle: bold ? FontStyle.Bold : FontStyle.Normal,
     };
     const builder = Skia.ParagraphBuilder.Make(style);
     builder.pushStyle(textStyle);
@@ -59,9 +66,9 @@ export function HighlightableText({
     const p = builder.build();
     p.layout(width);
     return p;
-  }, [text, width]);
+  }, [text, width, fontSize, resolvedLineHeight, bold]);
 
-  const height = paragraph ? paragraph.getHeight() : LINE_HEIGHT;
+  const height = paragraph ? paragraph.getHeight() : resolvedLineHeight;
 
   const measureAndRegister = useCallback(() => {
     const root = getRootView();

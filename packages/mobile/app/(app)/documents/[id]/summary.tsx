@@ -126,6 +126,22 @@ function buildSummary(
       ) {
         headingStack.pop();
       }
+      const hs = byNode.get(node.id);
+      if (hs && node.text) {
+        const text = node.text;
+        // Ancestors are the parent headings only — exclude the heading itself.
+        const ancestors = headingStack.slice();
+        const sorted = hs
+          .slice()
+          .sort((a, b) => (a.start_offset ?? 0) - (b.start_offset ?? 0));
+        for (const h of sorted) {
+          out.push({
+            highlight_id: h.id,
+            text: text.substring(h.start_offset!, h.end_offset!),
+            ancestors,
+          });
+        }
+      }
       headingStack.push({ node_id: node.id, text: node.text ?? "", level });
       if (node.children) for (const child of node.children) visit(child);
       // Pop this heading when leaving its subtree.

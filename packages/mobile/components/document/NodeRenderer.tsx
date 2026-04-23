@@ -1,5 +1,5 @@
 import React from "react";
-import { View, Text, StyleSheet } from "react-native";
+import { View, Text, StyleSheet, ViewStyle } from "react-native";
 import type { DocumentContentTreeNodeOutput, HighlightRead } from "@precis/shared";
 import { HighlightableText } from "./HighlightableText";
 
@@ -28,17 +28,25 @@ function RenderNode({
   const nodeHighlights = highlights.filter((h) => h.node_id === node.id);
 
   switch (node.type) {
-    case "heading":
+    case "heading": {
+      const level = node.level ?? 1;
+      const typo = headingTypography[level] ?? headingTypography[1];
       return (
-        <View style={styles.headingContainer}>
-          <Text style={[styles.heading, node.level != null && headingStyles[node.level]]}>
-            {node.text}
-          </Text>
+        <View style={[styles.headingContainer, headingSpacing[level] ?? headingSpacing[1]]}>
+          <HighlightableText
+            nodeId={node.id}
+            text={node.text ?? ""}
+            highlights={nodeHighlights}
+            fontSize={typo.fontSize}
+            lineHeight={typo.lineHeight}
+            bold
+          />
           {node.children && node.children.length > 0 && (
             <NodeRenderer nodes={node.children} highlights={highlights} />
           )}
         </View>
       );
+    }
 
     case "paragraph":
       return (
@@ -93,18 +101,26 @@ function RenderNode({
   }
 }
 
-const headingStyles: Record<number, object> = {
-  1: { fontSize: 26, fontWeight: "700", marginTop: 24, marginBottom: 8 },
-  2: { fontSize: 22, fontWeight: "700", marginTop: 20, marginBottom: 6 },
-  3: { fontSize: 18, fontWeight: "600", marginTop: 16, marginBottom: 4 },
-  4: { fontSize: 16, fontWeight: "600", marginTop: 12, marginBottom: 4 },
-  5: { fontSize: 14, fontWeight: "600", marginTop: 8, marginBottom: 2 },
-  6: { fontSize: 13, fontWeight: "600", marginTop: 8, marginBottom: 2 },
+const headingTypography: Record<number, { fontSize: number; lineHeight: number }> = {
+  1: { fontSize: 26, lineHeight: 34 },
+  2: { fontSize: 22, lineHeight: 30 },
+  3: { fontSize: 18, lineHeight: 26 },
+  4: { fontSize: 16, lineHeight: 24 },
+  5: { fontSize: 14, lineHeight: 22 },
+  6: { fontSize: 13, lineHeight: 20 },
+};
+
+const headingSpacing: Record<number, ViewStyle> = {
+  1: { marginTop: 24, marginBottom: 8 },
+  2: { marginTop: 20, marginBottom: 6 },
+  3: { marginTop: 16, marginBottom: 4 },
+  4: { marginTop: 12, marginBottom: 4 },
+  5: { marginTop: 8, marginBottom: 2 },
+  6: { marginTop: 8, marginBottom: 2 },
 };
 
 const styles = StyleSheet.create({
-  headingContainer: { marginBottom: 4 },
-  heading: { color: "#1a1a1a" },
+  headingContainer: {},
   paragraphContainer: { marginBottom: 12 },
   listItem: { flexDirection: "row", marginBottom: 6, alignItems: "flex-start" },
   bullet: { marginRight: 6, color: "#555", lineHeight: 22 },
