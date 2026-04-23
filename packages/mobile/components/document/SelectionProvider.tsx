@@ -9,6 +9,7 @@ import React, {
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
 } from "react";
 import { StyleSheet, View } from "react-native";
 import type { SkParagraph } from "@shopify/react-native-skia";
@@ -45,8 +46,11 @@ interface NodeEntry {
   height: number;
 }
 
+export type SliceRange = { start: number; end: number } | null;
+
 interface SelectionContextValue {
-  selection: Selection | null;
+  subscribe: (listener: () => void) => () => void;
+  getSelection: () => Selection | null;
   orderOf: (nodeId: string) => number;
   registerNode: (entry: NodeEntry) => void;
   unregisterNode: (nodeId: string) => void;
@@ -60,8 +64,72 @@ const SelectionContext = createContext<SelectionContextValue | null>(null);
 
 export function useSelection(): SelectionContextValue {
   const ctx = useContext(SelectionContext);
-  if (!ctx) throw new Error("useSelection must be used inside SelectionProvider");
+  if (!ctx)
+    throw new Error("useSelection must be used inside SelectionProvider");
   return ctx;
+}
+
+/**
+ * Per-node slice subscription. Returns a stable reference when the slice
+ * hasn't changed so the consuming component skips re-rendering.
+ */
+export function useSelectionSlice(
+  nodeId: string,
+  textLength: number,
+): SliceRange {
+  const { subscribe, getSelection, orderOf } = useSelection();
+  const lastRef = useRef<SliceRange>(null);
+
+  const getSnapshot = useCallback((): SliceRange => {
+    const sel = getSelection();
+    const next = computeSlice(sel, nodeId, orderOf, textLength);
+    const prev = lastRef.current;
+    if (
+      (prev === null && next === null) ||
+      (prev !== null &&
+        next !== null &&
+        prev.start === next.start &&
+        prev.end === next.end)
+    ) {
+      return prev;
+    }
+    lastRef.current = next;
+    return next;
+  }, [getSelection, nodeId, orderOf, textLength]);
+
+  return useSyncExternalStore(subscribe, getSnapshot);
+}
+
+function computeSlice(
+  sel: Selection | null,
+  nodeId: string,
+  orderOf: (id: string) => number,
+  textLength: number,
+): SliceRange {
+  if (!sel) return null;
+  const thisOrder = orderOf(nodeId);
+  if (thisOrder < 0) return null;
+  const aOrder = orderOf(sel.anchor.nodeId);
+  const fOrder = orderOf(sel.focus.nodeId);
+  if (aOrder < 0 || fOrder < 0) return null;
+  let sEp = sel.anchor;
+  let eEp = sel.focus;
+  if (
+    aOrder > fOrder ||
+    (aOrder === fOrder && sel.anchor.offset > sel.focus.offset)
+  ) {
+    sEp = sel.focus;
+    eEp = sel.anchor;
+  }
+  const sOrder = orderOf(sEp.nodeId);
+  const eOrder = orderOf(eEp.nodeId);
+  if (thisOrder < sOrder || thisOrder > eOrder) return null;
+  let s = 0;
+  let e = textLength;
+  if (thisOrder === sOrder) s = sEp.offset;
+  if (thisOrder === eOrder) e = eEp.offset;
+  if (s >= e) return null;
+  return { start: s, end: e };
 }
 
 export interface SelectionProviderHandle {
@@ -75,15 +143,49 @@ interface Props {
 }
 
 export const SelectionProvider = forwardRef<SelectionProviderHandle, Props>(
-  function SelectionProvider({ children, disabled = false, onSelectionChange }, ref) {
+  function SelectionProvider(
+    { children, disabled = false, onSelectionChange },
+    ref,
+  ) {
     const rootRef = useRef<View>(null);
     const registryRef = useRef<Map<string, NodeEntry>>(new Map());
     const orderMapRef = useRef<Map<string, number>>(new Map());
     const [orderVersion, setOrderVersion] = useState(0);
 
-    const [selection, setSelectionState] = useState<Selection | null>(null);
+    // External store for selection. Kept out of React state so drag updates
+    // don't re-render every consumer; components subscribe via
+    // useSyncExternalStore and bail out when their slice hasn't changed.
     const selectionRef = useRef<Selection | null>(null);
-    selectionRef.current = selection;
+    const listenersRef = useRef<Set<() => void>>(new Set());
+
+    const subscribe = useCallback((fn: () => void) => {
+      listenersRef.current.add(fn);
+      return () => {
+        listenersRef.current.delete(fn);
+      };
+    }, []);
+
+    const getSelection = useCallback(() => selectionRef.current, []);
+
+    const notify = useCallback(() => {
+      listenersRef.current.forEach((l) => l());
+    }, []);
+
+    const setSelection = useCallback(
+      (
+        next: Selection | null | ((prev: Selection | null) => Selection | null),
+      ) => {
+        const prev = selectionRef.current;
+        const value =
+          typeof next === "function"
+            ? (next as (p: Selection | null) => Selection | null)(prev)
+            : next;
+        if (prev === value) return;
+        selectionRef.current = value;
+        notify();
+      },
+      [notify],
+    );
 
     const onSelectionChangeRef = useRef(onSelectionChange);
     onSelectionChangeRef.current = onSelectionChange;
@@ -96,7 +198,9 @@ export const SelectionProvider = forwardRef<SelectionProviderHandle, Props>(
       entries.forEach((e, i) => m.set(e.nodeId, i));
       orderMapRef.current = m;
       setOrderVersion((v) => v + 1);
-    }, []);
+      // Slice results depend on order too — let subscribers re-evaluate.
+      notify();
+    }, [notify]);
 
     const registerNode = useCallback(
       (entry: NodeEntry) => {
@@ -131,7 +235,7 @@ export const SelectionProvider = forwardRef<SelectionProviderHandle, Props>(
     const setSelectionForNode = useCallback(
       (nodeId: string, start: number, end: number) => {
         if (start === end) {
-          setSelectionState(null);
+          setSelection(null);
           emit(null);
           return;
         }
@@ -139,25 +243,27 @@ export const SelectionProvider = forwardRef<SelectionProviderHandle, Props>(
           anchor: { nodeId, offset: start },
           focus: { nodeId, offset: end },
         };
-        setSelectionState(sel);
+        setSelection(sel);
         emit(sel);
       },
-      [emit],
+      [emit, setSelection],
     );
 
     const clearSelection = useCallback(() => {
-      setSelectionState(null);
+      setSelection(null);
       emit(null);
-    }, [emit]);
+    }, [emit, setSelection]);
 
-    useImperativeHandle(ref, () => ({ clear: clearSelection }), [clearSelection]);
+    useImperativeHandle(ref, () => ({ clear: clearSelection }), [
+      clearSelection,
+    ]);
 
     useEffect(() => {
       if (disabled) {
-        setSelectionState(null);
+        setSelection(null);
         emit(null);
       }
-    }, [disabled, emit]);
+    }, [disabled, emit, setSelection]);
 
     const hitTestNode = useCallback((y: number): NodeEntry | null => {
       let best: NodeEntry | null = null;
@@ -173,11 +279,14 @@ export const SelectionProvider = forwardRef<SelectionProviderHandle, Props>(
       return best;
     }, []);
 
-    const hitTestPos = useCallback((entry: NodeEntry, x: number, y: number): number => {
-      const lx = Math.max(0, Math.min(entry.width, x - entry.x));
-      const ly = Math.max(0, Math.min(entry.height, y - entry.y));
-      return entry.paragraph.getGlyphPositionAtCoordinate(lx, ly);
-    }, []);
+    const hitTestPos = useCallback(
+      (entry: NodeEntry, x: number, y: number): number => {
+        const lx = Math.max(0, Math.min(entry.width, x - entry.x));
+        const ly = Math.max(0, Math.min(entry.height, y - entry.y));
+        return entry.paragraph.getGlyphPositionAtCoordinate(lx, ly);
+      },
+      [],
+    );
 
     const handleDragStart = useCallback(
       (x: number, y: number) => {
@@ -185,12 +294,12 @@ export const SelectionProvider = forwardRef<SelectionProviderHandle, Props>(
         if (!entry) return;
         const pos = hitTestPos(entry, x, y);
         const word = wordBoundsAt(entry.text, pos);
-        setSelectionState({
+        setSelection({
           anchor: { nodeId: entry.nodeId, offset: word.start },
           focus: { nodeId: entry.nodeId, offset: word.end },
         });
       },
-      [hitTestNode, hitTestPos],
+      [hitTestNode, hitTestPos, setSelection],
     );
 
     const handleDragUpdate = useCallback(
@@ -198,17 +307,20 @@ export const SelectionProvider = forwardRef<SelectionProviderHandle, Props>(
         const entry = hitTestNode(y);
         if (!entry) return;
         const pos = hitTestPos(entry, x, y);
-        setSelectionState((prev) => {
+        setSelection((prev) => {
           if (!prev) {
             return {
               anchor: { nodeId: entry.nodeId, offset: pos },
               focus: { nodeId: entry.nodeId, offset: pos },
             };
           }
+          if (prev.focus.nodeId === entry.nodeId && prev.focus.offset === pos) {
+            return prev;
+          }
           return { ...prev, focus: { nodeId: entry.nodeId, offset: pos } };
         });
       },
-      [hitTestNode, hitTestPos],
+      [hitTestNode, hitTestPos, setSelection],
     );
 
     const handleDragEnd = useCallback(() => {
@@ -218,7 +330,12 @@ export const SelectionProvider = forwardRef<SelectionProviderHandle, Props>(
     const handleOuterTap = useCallback(
       (x: number, y: number) => {
         for (const e of registryRef.current.values()) {
-          if (y >= e.y && y <= e.y + e.height && x >= e.x && x <= e.x + e.width) {
+          if (
+            y >= e.y &&
+            y <= e.y + e.height &&
+            x >= e.x &&
+            x <= e.x + e.width
+          ) {
             // Tap landed on a registered node; let the node's own tap handle it.
             return;
           }
@@ -261,43 +378,22 @@ export const SelectionProvider = forwardRef<SelectionProviderHandle, Props>(
       [pan, outerTap],
     );
 
-    const handleAnchors = useMemo(() => {
-      if (!selection) return null;
-      const norm = normalize(selection, orderMapRef.current, registryRef.current);
-      if (!norm || norm.slices.length === 0) return null;
-      const first = norm.slices[0];
-      const last = norm.slices[norm.slices.length - 1];
-      const firstEntry = registryRef.current.get(first.nodeId);
-      const lastEntry = registryRef.current.get(last.nodeId);
-      if (!firstEntry || !lastEntry) return null;
-      const firstRects = firstEntry.paragraph.getRectsForRange(first.start, first.end);
-      const lastRects = lastEntry.paragraph.getRectsForRange(last.start, last.end);
-      if (firstRects.length === 0 || lastRects.length === 0) return null;
-      const fr = firstRects[0];
-      const lr = lastRects[lastRects.length - 1];
-      return {
-        left: { x: firstEntry.x + fr.x, y: firstEntry.y + fr.y + fr.height },
-        right: {
-          x: lastEntry.x + lr.x + lr.width,
-          y: lastEntry.y + lr.y + lr.height,
-        },
-      };
-      // orderVersion triggers recompute when layouts/order change
-    }, [selection, orderVersion]);
-
     const handleAnchorRef = useRef<{
       which: "left" | "right";
       x: number;
       y: number;
     } | null>(null);
 
-    const onHandleStart = useCallback(
-      (which: "left" | "right") => {
-        if (!handleAnchors) return;
-        handleAnchorRef.current = { which, ...handleAnchors[which] };
-      },
-      [handleAnchors],
-    );
+    const handleAnchorsRef = useRef<{
+      left: { x: number; y: number };
+      right: { x: number; y: number };
+    } | null>(null);
+
+    const onHandleStart = useCallback((which: "left" | "right") => {
+      const anchors = handleAnchorsRef.current;
+      if (!anchors) return;
+      handleAnchorRef.current = { which, ...anchors[which] };
+    }, []);
 
     const onHandleMove = useCallback(
       (tx: number, ty: number) => {
@@ -308,16 +404,20 @@ export const SelectionProvider = forwardRef<SelectionProviderHandle, Props>(
         const entry = hitTestNode(py);
         if (!entry) return;
         const pos = hitTestPos(entry, px, py);
-        setSelectionState((prev) => {
+        setSelection((prev) => {
           if (!prev) return prev;
-          const norm = normalize(prev, orderMapRef.current, registryRef.current);
+          const norm = normalize(
+            prev,
+            orderMapRef.current,
+            registryRef.current,
+          );
           if (!norm) return prev;
           const other = a.which === "left" ? norm.end : norm.start;
           const moved: Endpoint = { nodeId: entry.nodeId, offset: pos };
           return { anchor: other, focus: moved };
         });
       },
-      [hitTestNode, hitTestPos],
+      [hitTestNode, hitTestPos, setSelection],
     );
 
     const onHandleEnd = useCallback(() => {
@@ -358,7 +458,8 @@ export const SelectionProvider = forwardRef<SelectionProviderHandle, Props>(
 
     const contextValue = useMemo<SelectionContextValue>(
       () => ({
-        selection,
+        subscribe,
+        getSelection,
         orderOf,
         registerNode,
         unregisterNode,
@@ -368,8 +469,8 @@ export const SelectionProvider = forwardRef<SelectionProviderHandle, Props>(
         getRootView,
       }),
       [
-        selection,
-        orderVersion,
+        subscribe,
+        getSelection,
         orderOf,
         registerNode,
         unregisterNode,
@@ -386,39 +487,112 @@ export const SelectionProvider = forwardRef<SelectionProviderHandle, Props>(
           <GestureDetector gesture={rootGesture}>
             <View collapsable={false}>{children}</View>
           </GestureDetector>
-          {handleAnchors && !disabled && (
-            <>
-              <GestureDetector gesture={leftHandleGesture}>
-                <View
-                  hitSlop={HANDLE_HIT_SLOP}
-                  style={[
-                    styles.handle,
-                    {
-                      left: handleAnchors.left.x - HANDLE_SIZE / 2,
-                      top: handleAnchors.left.y - HANDLE_SIZE / 2,
-                    },
-                  ]}
-                />
-              </GestureDetector>
-              <GestureDetector gesture={rightHandleGesture}>
-                <View
-                  hitSlop={HANDLE_HIT_SLOP}
-                  style={[
-                    styles.handle,
-                    {
-                      left: handleAnchors.right.x - HANDLE_SIZE / 2,
-                      top: handleAnchors.right.y - HANDLE_SIZE / 2,
-                    },
-                  ]}
-                />
-              </GestureDetector>
-            </>
+          {!disabled && (
+            <SelectionHandles
+              subscribe={subscribe}
+              getSelection={getSelection}
+              orderVersion={orderVersion}
+              registryRef={registryRef}
+              orderMapRef={orderMapRef}
+              anchorsOut={handleAnchorsRef}
+              leftGesture={leftHandleGesture}
+              rightGesture={rightHandleGesture}
+            />
           )}
         </View>
       </SelectionContext.Provider>
     );
   },
 );
+
+interface SelectionHandlesProps {
+  subscribe: (fn: () => void) => () => void;
+  getSelection: () => Selection | null;
+  orderVersion: number;
+  registryRef: React.RefObject<Map<string, NodeEntry>>;
+  orderMapRef: React.RefObject<Map<string, number>>;
+  anchorsOut: React.RefObject<{
+    left: { x: number; y: number };
+    right: { x: number; y: number };
+  } | null>;
+  leftGesture: ReturnType<typeof Gesture.Pan>;
+  rightGesture: ReturnType<typeof Gesture.Pan>;
+}
+
+function SelectionHandles({
+  subscribe,
+  getSelection,
+  orderVersion,
+  registryRef,
+  orderMapRef,
+  anchorsOut,
+  leftGesture,
+  rightGesture,
+}: SelectionHandlesProps) {
+  const selection = useSyncExternalStore(subscribe, getSelection);
+
+  const anchors = useMemo(() => {
+    if (!selection) return null;
+    const norm = normalize(selection, orderMapRef.current, registryRef.current);
+    if (!norm || norm.slices.length === 0) return null;
+    const first = norm.slices[0];
+    const last = norm.slices[norm.slices.length - 1];
+    const firstEntry = registryRef.current.get(first.nodeId);
+    const lastEntry = registryRef.current.get(last.nodeId);
+    if (!firstEntry || !lastEntry) return null;
+    const firstRects = firstEntry.paragraph.getRectsForRange(
+      first.start,
+      first.end,
+    );
+    const lastRects = lastEntry.paragraph.getRectsForRange(
+      last.start,
+      last.end,
+    );
+    if (firstRects.length === 0 || lastRects.length === 0) return null;
+    const fr = firstRects[0];
+    const lr = lastRects[lastRects.length - 1];
+    return {
+      left: { x: firstEntry.x + fr.x, y: firstEntry.y + fr.y + fr.height },
+      right: {
+        x: lastEntry.x + lr.x + lr.width,
+        y: lastEntry.y + lr.y + lr.height,
+      },
+    };
+    // orderVersion/registryRef/orderMapRef are refs; orderVersion triggers recompute
+  }, [selection, orderVersion, registryRef, orderMapRef]);
+
+  anchorsOut.current = anchors;
+  if (!anchors) return null;
+
+  return (
+    <>
+      <GestureDetector gesture={leftGesture}>
+        <View
+          hitSlop={HANDLE_HIT_SLOP}
+          style={[
+            styles.handle,
+            {
+              left: anchors.left.x - HANDLE_SIZE / 2,
+              top: anchors.left.y - HANDLE_SIZE / 2,
+            },
+          ]}
+        />
+      </GestureDetector>
+      <GestureDetector gesture={rightGesture}>
+        <View
+          hitSlop={HANDLE_HIT_SLOP}
+          style={[
+            styles.handle,
+            {
+              left: anchors.right.x - HANDLE_SIZE / 2,
+              top: anchors.right.y - HANDLE_SIZE / 2,
+            },
+          ]}
+        />
+      </GestureDetector>
+    </>
+  );
+}
 
 function normalize(
   sel: Selection,

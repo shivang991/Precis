@@ -12,7 +12,7 @@ import {
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { scheduleOnRN } from "react-native-worklets";
 import type { HighlightRead } from "@precis/shared";
-import { useSelection, wordBoundsAt } from "./SelectionProvider";
+import { useSelection, useSelectionSlice, wordBoundsAt } from "./SelectionProvider";
 
 const HIGHLIGHT_YELLOW = "#FFF176";
 const SELECTION_BLUE = "rgba(0, 122, 255, 0.35)";
@@ -32,8 +32,6 @@ export function HighlightableText({
   highlights,
 }: HighlightableTextProps) {
   const {
-    selection,
-    orderOf,
     registerNode,
     unregisterNode,
     setSelectionForNode,
@@ -96,32 +94,7 @@ export function HighlightableText({
     return rects;
   }, [paragraph, highlights]);
 
-  const slice = useMemo(() => {
-    if (!selection) return null;
-    const thisOrder = orderOf(nodeId);
-    if (thisOrder < 0) return null;
-    const aOrder = orderOf(selection.anchor.nodeId);
-    const fOrder = orderOf(selection.focus.nodeId);
-    if (aOrder < 0 || fOrder < 0) return null;
-    let sEp = selection.anchor;
-    let eEp = selection.focus;
-    if (
-      aOrder > fOrder ||
-      (aOrder === fOrder && selection.anchor.offset > selection.focus.offset)
-    ) {
-      sEp = selection.focus;
-      eEp = selection.anchor;
-    }
-    const sOrder = orderOf(sEp.nodeId);
-    const eOrder = orderOf(eEp.nodeId);
-    if (thisOrder < sOrder || thisOrder > eOrder) return null;
-    let s = 0;
-    let e = text.length;
-    if (thisOrder === sOrder) s = sEp.offset;
-    if (thisOrder === eOrder) e = eEp.offset;
-    if (s >= e) return null;
-    return { start: s, end: e };
-  }, [selection, nodeId, orderOf, text]);
+  const slice = useSelectionSlice(nodeId, text.length);
 
   const selectionRects = useMemo(() => {
     if (!paragraph || !slice) return [];
