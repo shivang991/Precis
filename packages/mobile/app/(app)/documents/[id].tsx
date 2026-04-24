@@ -266,13 +266,6 @@ export default function DocumentViewerScreen() {
 
         <TouchableOpacity
           style={styles.toolBtn}
-          onPress={() => router.push(`/(app)/documents/${id}/settings`)}
-        >
-          <Text style={styles.toolBtnText}>Settings</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.toolBtn}
           onPress={() => {
             setHighlighterOn((v) => !v);
           }}
