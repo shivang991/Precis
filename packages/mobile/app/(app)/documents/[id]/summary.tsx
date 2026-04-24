@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   StyleSheet,
   ActivityIndicator,
+  ViewStyle,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
@@ -14,18 +15,6 @@ import type {
   DocumentContentTreeNodeOutput,
   HighlightRead,
 } from "@precis/shared";
-
-interface HeadingCrumb {
-  node_id: string;
-  text: string;
-  level: number;
-}
-
-interface SummarySection {
-  highlight_id: string;
-  text: string;
-  ancestors: HeadingCrumb[];
-}
 
 export default function SummaryViewScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -44,11 +33,22 @@ export default function SummaryViewScreen() {
     enabled: !!id && document?.status === "ready",
   });
 
-  const sections = useMemo<SummarySection[]>(() => {
-    const nodes = document?.document_content_tree?.nodes ?? [];
-    if (nodes.length === 0 || highlights.length === 0) return [];
-    return buildSummary(nodes, highlights);
-  }, [document, highlights]);
+  const highlightsByNode = useMemo(() => {
+    const map = new Map<string, HighlightRead[]>();
+    for (const h of highlights) {
+      if (h.start_offset == null || h.end_offset == null) continue;
+      const list = map.get(h.node_id);
+      if (list) list.push(h);
+      else map.set(h.node_id, [h]);
+    }
+    for (const list of map.values()) {
+      list.sort((a, b) => (a.start_offset ?? 0) - (b.start_offset ?? 0));
+    }
+    return map;
+  }, [highlights]);
+
+  const nodes = document?.document_content_tree?.nodes ?? [];
+  const hasAnyHighlights = highlights.length > 0;
 
   if (docLoading || hlLoading) {
     return (
@@ -67,13 +67,13 @@ export default function SummaryViewScreen() {
       </View>
 
       <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
-        {sections.length === 0 ? (
+        {!hasAnyHighlights ? (
           <Text style={styles.empty}>
             No highlights yet. Go back and highlight passages to build your summary.
           </Text>
         ) : (
-          sections.map((section) => (
-            <SummarySectionCard key={section.highlight_id} section={section} />
+          nodes.map((n) => (
+            <RenderNode key={n.id} node={n} highlightsByNode={highlightsByNode} />
           ))
         )}
       </ScrollView>
@@ -81,97 +81,130 @@ export default function SummaryViewScreen() {
   );
 }
 
-function SummarySectionCard({ section }: { section: SummarySection }) {
-  return (
-    <View style={styles.card}>
-      {section.ancestors.length > 0 && (
-        <View style={styles.breadcrumb}>
-          {section.ancestors.map((a, i) => (
-            <React.Fragment key={a.node_id}>
-              {i > 0 && <Text style={styles.breadcrumbSep}> › </Text>}
-              <Text style={styles.breadcrumbItem}>{a.text}</Text>
-            </React.Fragment>
+// Returns true if this subtree contains any highlights.
+function subtreeHasHighlights(
+  node: DocumentContentTreeNodeOutput,
+  highlightsByNode: Map<string, HighlightRead[]>,
+): boolean {
+  if (highlightsByNode.has(node.id)) return true;
+  if (node.children) {
+    for (const c of node.children) {
+      if (subtreeHasHighlights(c, highlightsByNode)) return true;
+    }
+  }
+  return false;
+}
+
+function RenderNode({
+  node,
+  highlightsByNode,
+}: {
+  node: DocumentContentTreeNodeOutput;
+  highlightsByNode: Map<string, HighlightRead[]>;
+}) {
+  if (!subtreeHasHighlights(node, highlightsByNode)) return null;
+
+  const nodeHighlights = highlightsByNode.get(node.id);
+
+  switch (node.type) {
+    case "heading": {
+      const level = node.level ?? 1;
+      const typo = headingTypography[level] ?? headingTypography[1];
+      return (
+        <View style={[styles.headingContainer, headingSpacing[level] ?? headingSpacing[1]]}>
+          <Text style={[{ fontSize: typo.fontSize, lineHeight: typo.lineHeight }, styles.heading]}>
+            {node.text ?? ""}
+          </Text>
+          {node.children?.map((c) => (
+            <RenderNode key={c.id} node={c} highlightsByNode={highlightsByNode} />
           ))}
         </View>
-      )}
-      <Text style={styles.highlightedText}>{section.text}</Text>
+      );
+    }
+
+    case "paragraph":
+      return nodeHighlights ? (
+        <View style={styles.paragraphContainer}>
+          <HighlightedSpans text={node.text ?? ""} highlights={nodeHighlights} />
+        </View>
+      ) : null;
+
+    case "list_item":
+      return nodeHighlights ? (
+        <View
+          style={[
+            styles.listItem,
+            { paddingLeft: ((node.content?.depth as number) ?? 0) * 16 + 8 },
+          ]}
+        >
+          <Text style={styles.bullet}>•</Text>
+          <View style={styles.listItemText}>
+            <HighlightedSpans text={node.text ?? ""} highlights={nodeHighlights} />
+          </View>
+        </View>
+      ) : null;
+
+    case "code":
+      return nodeHighlights ? (
+        <View style={styles.codeBlock}>
+          <Text style={styles.codeText}>
+            <HighlightedSpans
+              text={node.text ?? ""}
+              highlights={nodeHighlights}
+              monospace
+            />
+          </Text>
+        </View>
+      ) : null;
+
+    default:
+      return null;
+  }
+}
+
+// Renders each highlighted span as its own Text. Spans from the same node
+// are shown on separate lines so the reader sees distinct picks rather than
+// a single mashed-together fragment.
+function HighlightedSpans({
+  text,
+  highlights,
+  monospace,
+}: {
+  text: string;
+  highlights: HighlightRead[];
+  monospace?: boolean;
+}) {
+  return (
+    <View style={styles.spans}>
+      {highlights.map((h) => (
+        <Text
+          key={h.id}
+          style={[styles.highlighted, monospace && styles.codeText]}
+        >
+          {text.substring(h.start_offset!, h.end_offset!)}
+        </Text>
+      ))}
     </View>
   );
 }
 
-// Walks the content tree in document order. Maintains a stack of open
-// headings (by level) so each highlight gets the path of headings that
-// currently scope it.
-function buildSummary(
-  nodes: DocumentContentTreeNodeOutput[],
-  highlights: HighlightRead[],
-): SummarySection[] {
-  const byNode = new Map<string, HighlightRead[]>();
-  for (const h of highlights) {
-    if (h.start_offset == null || h.end_offset == null) continue;
-    const list = byNode.get(h.node_id);
-    if (list) list.push(h);
-    else byNode.set(h.node_id, [h]);
-  }
+const headingTypography: Record<number, { fontSize: number; lineHeight: number }> = {
+  1: { fontSize: 26, lineHeight: 34 },
+  2: { fontSize: 22, lineHeight: 30 },
+  3: { fontSize: 18, lineHeight: 26 },
+  4: { fontSize: 16, lineHeight: 24 },
+  5: { fontSize: 14, lineHeight: 22 },
+  6: { fontSize: 13, lineHeight: 20 },
+};
 
-  const out: SummarySection[] = [];
-  const headingStack: HeadingCrumb[] = [];
-
-  const visit = (node: DocumentContentTreeNodeOutput) => {
-    if (node.type === "heading") {
-      const level = node.level ?? 1;
-      while (
-        headingStack.length > 0 &&
-        headingStack[headingStack.length - 1].level >= level
-      ) {
-        headingStack.pop();
-      }
-      const hs = byNode.get(node.id);
-      if (hs && node.text) {
-        const text = node.text;
-        // Ancestors are the parent headings only — exclude the heading itself.
-        const ancestors = headingStack.slice();
-        const sorted = hs
-          .slice()
-          .sort((a, b) => (a.start_offset ?? 0) - (b.start_offset ?? 0));
-        for (const h of sorted) {
-          out.push({
-            highlight_id: h.id,
-            text: text.substring(h.start_offset!, h.end_offset!),
-            ancestors,
-          });
-        }
-      }
-      headingStack.push({ node_id: node.id, text: node.text ?? "", level });
-      if (node.children) for (const child of node.children) visit(child);
-      // Pop this heading when leaving its subtree.
-      const idx = headingStack.findIndex((h) => h.node_id === node.id);
-      if (idx >= 0) headingStack.length = idx;
-      return;
-    }
-
-    const hs = byNode.get(node.id);
-    if (hs && node.text) {
-      const text = node.text;
-      const ancestors = headingStack.slice();
-      const sorted = hs
-        .slice()
-        .sort((a, b) => (a.start_offset ?? 0) - (b.start_offset ?? 0));
-      for (const h of sorted) {
-        out.push({
-          highlight_id: h.id,
-          text: text.substring(h.start_offset!, h.end_offset!),
-          ancestors,
-        });
-      }
-    }
-
-    if (node.children) for (const child of node.children) visit(child);
-  };
-
-  for (const node of nodes) visit(node);
-  return out;
-}
+const headingSpacing: Record<number, ViewStyle> = {
+  1: { marginTop: 24, marginBottom: 8 },
+  2: { marginTop: 20, marginBottom: 6 },
+  3: { marginTop: 16, marginBottom: 4 },
+  4: { marginTop: 12, marginBottom: 4 },
+  5: { marginTop: 8, marginBottom: 2 },
+  6: { marginTop: 8, marginBottom: 2 },
+};
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#fff" },
@@ -192,17 +225,17 @@ const styles = StyleSheet.create({
   },
   toolBtnText: { fontSize: 13, color: "#333" },
   scroll: { flex: 1 },
-  content: { padding: 16, gap: 16, paddingBottom: 48 },
-  card: {
-    borderLeftWidth: 3,
-    borderLeftColor: "#1a1a1a",
-    paddingLeft: 12,
-    paddingVertical: 8,
-  },
-  breadcrumb: { flexDirection: "row", flexWrap: "wrap", marginBottom: 6 },
-  breadcrumbItem: { fontWeight: "600", color: "#555", fontSize: 12 },
-  breadcrumbSep: { color: "#aaa", fontSize: 12 },
-  highlightedText: {
+  content: { padding: 16, paddingBottom: 48 },
+  headingContainer: {},
+  heading: { fontWeight: "700", color: "#1a1a1a" },
+  paragraphContainer: { marginBottom: 12 },
+  listItem: { flexDirection: "row", marginBottom: 6, alignItems: "flex-start" },
+  listItemText: { flex: 1 },
+  bullet: { marginRight: 6, color: "#555", lineHeight: 22 },
+  codeBlock: { backgroundColor: "#f5f5f5", padding: 12, borderRadius: 6, marginVertical: 8 },
+  codeText: { fontFamily: "monospace", fontSize: 13, color: "#333" },
+  spans: { gap: 4 },
+  highlighted: {
     fontSize: 15,
     lineHeight: 24,
     color: "#1a1a1a",
