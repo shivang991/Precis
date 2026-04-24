@@ -201,6 +201,21 @@ export default function DocumentViewerScreen() {
     clearUiSelection();
   };
 
+  const handleClearPress = () => {
+    if (highlights.length === 0) return;
+    Alert.alert("Clear all highlights?", "This will remove every highlight in this document.", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Clear",
+        style: "destructive",
+        onPress: () => {
+          removeHighlightsByIds(highlights.map((h) => h.id));
+          clearUiSelection();
+        },
+      },
+    ]);
+  };
+
   const handleRemovePress = () => {
     if (!selection) return;
     // For each slice, drop overlapping highlights and re-add the parts that
@@ -271,6 +286,14 @@ export default function DocumentViewerScreen() {
           }}
         >
           <Text style={styles.toolBtnText}>Highlighter: {highlighterOn ? "On" : "Off"}</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.toolBtn}
+          onPress={handleClearPress}
+          disabled={highlights.length === 0}
+        >
+          <Text style={styles.toolBtnText}>Clear</Text>
         </TouchableOpacity>
       </View>
 
