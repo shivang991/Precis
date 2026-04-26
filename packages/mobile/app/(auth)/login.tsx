@@ -1,19 +1,16 @@
-import { useState } from "react";
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  StyleSheet,
-  ActivityIndicator,
-  Alert,
-} from "react-native";
-import * as WebBrowser from "expo-web-browser";
-import * as Linking from "expo-linking";
-import { makeRedirectUri } from "expo-auth-session";
-import { useRouter } from "expo-router";
-import { useAuthStore } from "../../store/auth";
-import { createApiClient } from "@precis/shared";
-import { API_BASE_URL } from "../../constants/api";
+import { useState } from 'react';
+
+import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Alert } from 'react-native';
+
+import { makeRedirectUri } from 'expo-auth-session';
+import * as Linking from 'expo-linking';
+import { useRouter } from 'expo-router';
+import * as WebBrowser from 'expo-web-browser';
+
+import { createApiClient } from '@precis/shared';
+
+import { API_BASE_URL } from '../../constants/api';
+import { useAuthStore } from '../../store/auth';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -24,7 +21,7 @@ export default function LoginScreen() {
   const { setToken, setUser } = useAuthStore();
   const [loading, setLoading] = useState(false);
 
-  const redirectUri = makeRedirectUri({ scheme: "precis", path: "auth" });
+  const redirectUri = makeRedirectUri({ scheme: 'precis', path: 'auth' });
 
   async function handleLogin() {
     setLoading(true);
@@ -37,23 +34,19 @@ export default function LoginScreen() {
       //    redirect to  precis://auth?access_token=<jwt>  after exchange.
       const result = await WebBrowser.openAuthSessionAsync(url, redirectUri);
 
-      if (result.type === "success") {
+      if (result.type === 'success') {
         const parsed = Linking.parse(result.url);
-        const accessToken = parsed.queryParams?.access_token as
-          | string
-          | undefined;
-        if (!accessToken) throw new Error("No access token in redirect");
+        const accessToken = parsed.queryParams?.access_token as string | undefined;
+        if (!accessToken) throw new Error('No access token in redirect');
 
         setToken(accessToken);
-        const user = await createApiClient(
-          API_BASE_URL,
-          () => accessToken,
-        ).getAuthMe();
+        const user = await createApiClient(API_BASE_URL, () => accessToken).getAuthMe();
         setUser(user);
-        router.replace("/(app)");
+        router.replace('/(app)');
       }
-    } catch (e: any) {
-      Alert.alert("Login failed", e.message ?? "Could not complete login");
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Could not complete login';
+      Alert.alert('Login failed', msg);
     } finally {
       setLoading(false);
     }
@@ -63,11 +56,7 @@ export default function LoginScreen() {
     <View style={styles.container}>
       <Text style={styles.title}>Precis</Text>
       <Text style={styles.subtitle}>Your intelligent document companion</Text>
-      <TouchableOpacity
-        style={styles.button}
-        onPress={handleLogin}
-        disabled={loading}
-      >
+      <TouchableOpacity style={styles.button} onPress={handleLogin} disabled={loading}>
         {loading ? (
           <ActivityIndicator color="#fff" />
         ) : (
@@ -81,34 +70,34 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
+    justifyContent: 'center',
+    alignItems: 'center',
     padding: 32,
-    backgroundColor: "#fff",
+    backgroundColor: '#fff',
   },
   title: {
     fontSize: 40,
-    fontWeight: "700",
+    fontWeight: '700',
     marginBottom: 8,
     letterSpacing: -1,
   },
   subtitle: {
     fontSize: 16,
-    color: "#666",
+    color: '#666',
     marginBottom: 48,
-    textAlign: "center",
+    textAlign: 'center',
   },
   button: {
-    backgroundColor: "#1a1a1a",
+    backgroundColor: '#1a1a1a',
     paddingVertical: 16,
     paddingHorizontal: 32,
     borderRadius: 12,
     minWidth: 240,
-    alignItems: "center",
+    alignItems: 'center',
   },
   buttonText: {
-    color: "#fff",
+    color: '#fff',
     fontSize: 16,
-    fontWeight: "600",
+    fontWeight: '600',
   },
 });

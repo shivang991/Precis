@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState } from 'react';
+
 import {
   View,
   Text,
@@ -7,16 +8,20 @@ import {
   StyleSheet,
   Alert,
   ActivityIndicator,
-} from "react-native";
-import { useRouter } from "expo-router";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import * as DocumentPicker from "expo-document-picker";
-import type { DocumentRead } from "@precis/shared";
-import { useApi } from "../../hooks/useApi";
-import { useAuthStore } from "../../store/auth";
-import { API_BASE_URL } from "../../constants/api";
+} from 'react-native';
 
-type DocumentSource = "digital" | "scanned";
+import * as DocumentPicker from 'expo-document-picker';
+import { useRouter } from 'expo-router';
+
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+
+import type { DocumentRead } from '@precis/shared';
+
+import { API_BASE_URL } from '../../constants/api';
+import { useApi } from '../../hooks/useApi';
+import { useAuthStore } from '../../store/auth';
+
+type DocumentSource = 'digital' | 'scanned';
 
 export default function FilesListScreen() {
   const router = useRouter();
@@ -26,35 +31,35 @@ export default function FilesListScreen() {
   const [processingId, setProcessingId] = useState<string | null>(null);
 
   const { data: documents, isLoading } = useQuery({
-    queryKey: ["documents"],
+    queryKey: ['documents'],
     queryFn: () => api.listDocuments(),
   });
 
   const deleteMutation = useMutation({
     mutationFn: (documentId: string) => api.deleteDocument(documentId),
     onMutate: async (documentId: string) => {
-      await qc.cancelQueries({ queryKey: ["documents"] });
-      const previous = qc.getQueryData<DocumentRead[]>(["documents"]);
-      qc.setQueryData<DocumentRead[]>(["documents"], (old) =>
+      await qc.cancelQueries({ queryKey: ['documents'] });
+      const previous = qc.getQueryData<DocumentRead[]>(['documents']);
+      qc.setQueryData<DocumentRead[]>(['documents'], (old) =>
         old ? old.filter((d) => d.id !== documentId) : old,
       );
       return { previous };
     },
-    onError: (e: any, _id, ctx) => {
-      if (ctx?.previous) qc.setQueryData(["documents"], ctx.previous);
-      Alert.alert("Delete failed", e.message);
+    onError: (e: unknown, _id, ctx) => {
+      if (ctx?.previous) qc.setQueryData(['documents'], ctx.previous);
+      Alert.alert('Delete failed', e instanceof Error ? e.message : 'Unknown error');
     },
     onSettled: () => {
-      qc.invalidateQueries({ queryKey: ["documents"] });
+      qc.invalidateQueries({ queryKey: ['documents'] });
     },
   });
 
   const confirmDelete = (doc: DocumentRead) => {
-    Alert.alert("Delete document", `Delete "${doc.title}"?`, [
-      { text: "Cancel", style: "cancel" },
+    Alert.alert('Delete document', `Delete "${doc.title}"?`, [
+      { text: 'Cancel', style: 'cancel' },
       {
-        text: "Delete",
-        style: "destructive",
+        text: 'Delete',
+        style: 'destructive',
         onPress: () => deleteMutation.mutate(doc.id),
       },
     ]);
@@ -63,7 +68,7 @@ export default function FilesListScreen() {
   const uploadMutation = useMutation({
     mutationFn: async (source: DocumentSource) => {
       const result = await DocumentPicker.getDocumentAsync({
-        type: "application/pdf",
+        type: 'application/pdf',
         copyToCacheDirectory: true,
       });
       if (result.canceled) return;
@@ -72,28 +77,25 @@ export default function FilesListScreen() {
       const file = {
         uri: asset.uri,
         name: asset.name,
-        type: asset.mimeType ?? "application/pdf",
+        type: asset.mimeType ?? 'application/pdf',
       } as unknown as Blob;
       const doc = await api.uploadDocument(
         { file, source },
-        { headers: { "Content-Type": "multipart/form-data" } },
+        { headers: { 'Content-Type': 'multipart/form-data' } },
       );
       return doc;
     },
     onSuccess: async (doc) => {
       if (!doc) return;
-      qc.invalidateQueries({ queryKey: ["documents"] });
+      qc.invalidateQueries({ queryKey: ['documents'] });
 
       // Kick off processing via SSE
       setProcessingId(doc.id);
       try {
-        const res = await fetch(
-          `${API_BASE_URL}/api/v1/documents/${doc.id}/process`,
-          {
-            method: "POST",
-            headers: { Authorization: `Bearer ${token}` },
-          },
-        );
+        const res = await fetch(`${API_BASE_URL}/api/v1/documents/${doc.id}/process`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}` },
+        });
         if (!res.ok) throw new Error(`Process failed (${res.status})`);
 
         const reader = res.body?.getReader();
@@ -103,28 +105,28 @@ export default function FilesListScreen() {
             const { done, value } = await reader.read();
             if (done) break;
             const chunk = decoder.decode(value, { stream: true });
-            if (chunk.includes("error")) {
-              throw new Error("Processing failed on server");
+            if (chunk.includes('error')) {
+              throw new Error('Processing failed on server');
             }
           }
         }
 
-        qc.invalidateQueries({ queryKey: ["documents"] });
+        qc.invalidateQueries({ queryKey: ['documents'] });
         router.push(`/(app)/documents/${doc.id}`);
-      } catch (e: any) {
-        Alert.alert("Processing failed", e.message);
+      } catch (e: unknown) {
+        Alert.alert('Processing failed', e instanceof Error ? e.message : 'Unknown error');
       } finally {
         setProcessingId(null);
       }
     },
-    onError: (e: any) => Alert.alert("Upload failed", e.message),
+    onError: (e: unknown) =>
+      Alert.alert('Upload failed', e instanceof Error ? e.message : 'Unknown error'),
   });
 
   const isBusy = uploadMutation.isPending || processingId !== null;
 
   const renderItem = ({ item }: { item: DocumentRead }) => {
-    const isDeleting =
-      deleteMutation.isPending && deleteMutation.variables === item.id;
+    const isDeleting = deleteMutation.isPending && deleteMutation.variables === item.id;
     return (
       <View style={styles.row}>
         <Text style={styles.docTitle} numberOfLines={1}>
@@ -145,9 +147,7 @@ export default function FilesListScreen() {
             onPress={() => confirmDelete(item)}
             disabled={isDeleting}
           >
-            <Text style={styles.deleteBtnText}>
-              {isDeleting ? "Deleting…" : "Delete"}
-            </Text>
+            <Text style={styles.deleteBtnText}>{isDeleting ? 'Deleting…' : 'Delete'}</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -158,10 +158,7 @@ export default function FilesListScreen() {
     <View style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.heading}>Your Files</Text>
-        <TouchableOpacity
-          style={styles.settingsBtn}
-          onPress={() => router.push("/(app)/settings")}
-        >
+        <TouchableOpacity style={styles.settingsBtn} onPress={() => router.push('/(app)/settings')}>
           <Text style={styles.settingsBtnText}>Settings</Text>
         </TouchableOpacity>
       </View>
@@ -170,7 +167,7 @@ export default function FilesListScreen() {
         <View style={styles.processingBanner}>
           <ActivityIndicator color="#fff" size="small" />
           <Text style={styles.processingText}>
-            {uploadMutation.isPending ? "Uploading…" : "Processing…"}
+            {uploadMutation.isPending ? 'Uploading…' : 'Processing…'}
           </Text>
         </View>
       )}
@@ -184,9 +181,7 @@ export default function FilesListScreen() {
           renderItem={renderItem}
           contentContainerStyle={styles.list}
           ListEmptyComponent={
-            <Text style={styles.empty}>
-              No documents yet. Upload a PDF below.
-            </Text>
+            <Text style={styles.empty}>No documents yet. Upload a PDF below.</Text>
           }
         />
       )}
@@ -194,14 +189,14 @@ export default function FilesListScreen() {
       <View style={styles.uploadBar}>
         <TouchableOpacity
           style={[styles.uploadBtn, isBusy && styles.uploadBtnDisabled]}
-          onPress={() => uploadMutation.mutate("digital")}
+          onPress={() => uploadMutation.mutate('digital')}
           disabled={isBusy}
         >
           <Text style={styles.uploadBtnText}>Upload Digital PDF</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.uploadBtn, isBusy && styles.uploadBtnDisabled]}
-          onPress={() => uploadMutation.mutate("scanned")}
+          onPress={() => uploadMutation.mutate('scanned')}
           disabled={isBusy}
         >
           <Text style={styles.uploadBtnText}>Upload Scanned PDF</Text>
@@ -212,83 +207,83 @@ export default function FilesListScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#fff" },
+  container: { flex: 1, backgroundColor: '#fff' },
   header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     padding: 16,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: "#e0e0e0",
+    borderBottomColor: '#e0e0e0',
   },
-  heading: { fontSize: 22, fontWeight: "700" },
+  heading: { fontSize: 22, fontWeight: '700' },
   settingsBtn: {
     paddingVertical: 6,
     paddingHorizontal: 12,
     borderWidth: 1,
-    borderColor: "#ccc",
+    borderColor: '#ccc',
     borderRadius: 8,
   },
-  settingsBtnText: { fontSize: 13, color: "#333" },
+  settingsBtnText: { fontSize: 13, color: '#333' },
   processingBanner: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
     gap: 8,
-    backgroundColor: "#1a1a1a",
+    backgroundColor: '#1a1a1a',
     paddingVertical: 10,
   },
-  processingText: { color: "#fff", fontSize: 13 },
+  processingText: { color: '#fff', fontSize: 13 },
   list: { padding: 16, gap: 2 },
   row: {
-    flexDirection: "column",
-    alignItems: "stretch",
+    flexDirection: 'column',
+    alignItems: 'stretch',
     paddingVertical: 14,
     gap: 8,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: "#e0e0e0",
+    borderBottomColor: '#e0e0e0',
   },
-  docTitle: { fontSize: 15, fontWeight: "500" },
-  docMeta: { fontSize: 12, color: "#888", marginTop: 2 },
+  docTitle: { fontSize: 15, fontWeight: '500' },
+  docMeta: { fontSize: 12, color: '#888', marginTop: 2 },
   actions: {
-    flexDirection: "row",
+    flexDirection: 'row',
     gap: 8,
     marginTop: 6,
   },
   openBtn: {
     flex: 1,
     borderWidth: 1,
-    borderColor: "#1a73e8",
+    borderColor: '#1a73e8',
     borderRadius: 8,
     paddingVertical: 10,
-    alignItems: "center",
+    alignItems: 'center',
   },
-  openBtnText: { fontSize: 14, color: "#1a73e8", fontWeight: "500" },
+  openBtnText: { fontSize: 14, color: '#1a73e8', fontWeight: '500' },
   deleteBtn: {
     flex: 1,
     borderWidth: 1,
-    borderColor: "#d93025",
+    borderColor: '#d93025',
     borderRadius: 8,
     paddingVertical: 10,
-    alignItems: "center",
+    alignItems: 'center',
   },
   deleteBtnDisabled: { opacity: 0.5 },
-  deleteBtnText: { fontSize: 14, color: "#d93025", fontWeight: "500" },
-  empty: { textAlign: "center", color: "#999", marginTop: 48 },
+  deleteBtnText: { fontSize: 14, color: '#d93025', fontWeight: '500' },
+  empty: { textAlign: 'center', color: '#999', marginTop: 48 },
   uploadBar: {
-    flexDirection: "row",
+    flexDirection: 'row',
     gap: 12,
     padding: 16,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: "#e0e0e0",
+    borderTopColor: '#e0e0e0',
   },
   uploadBtn: {
     flex: 1,
-    backgroundColor: "#1a1a1a",
+    backgroundColor: '#1a1a1a',
     borderRadius: 10,
     paddingVertical: 14,
-    alignItems: "center",
+    alignItems: 'center',
   },
   uploadBtnDisabled: { opacity: 0.5 },
-  uploadBtnText: { color: "#fff", fontSize: 14, fontWeight: "600" },
+  uploadBtnText: { color: '#fff', fontSize: 14, fontWeight: '600' },
 });

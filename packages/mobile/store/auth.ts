@@ -1,7 +1,9 @@
-import { create } from "zustand";
-import { persist, createJSONStorage, type StateStorage } from "zustand/middleware";
-import * as SecureStore from "expo-secure-store";
-import type { UserRead } from "@precis/shared";
+import * as SecureStore from 'expo-secure-store';
+
+import { create } from 'zustand';
+import { persist, createJSONStorage, type StateStorage } from 'zustand/middleware';
+
+import type { UserRead } from '@precis/shared';
 
 const secureStorage: StateStorage = {
   getItem: (key) => SecureStore.getItemAsync(key),
@@ -31,7 +33,7 @@ export const useAuthStore = create<AuthState>()(
       logout: () => set({ token: null, user: null }),
     }),
     {
-      name: "auth-storage",
+      name: 'auth-storage',
       storage: createJSONStorage(() => secureStorage),
     },
   ),

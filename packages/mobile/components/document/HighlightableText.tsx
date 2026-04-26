@@ -1,5 +1,7 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { LayoutChangeEvent, StyleSheet, View } from "react-native";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+
+import { LayoutChangeEvent, StyleSheet, View } from 'react-native';
+
 import {
   Canvas,
   FontStyle,
@@ -8,17 +10,19 @@ import {
   Skia,
   SkParagraph,
   TextAlign,
-} from "@shopify/react-native-skia";
-import { Gesture, GestureDetector } from "react-native-gesture-handler";
-import { scheduleOnRN } from "react-native-worklets";
-import type { HighlightRead } from "@precis/shared";
-import { useSelection, useSelectionSlice, wordBoundsAt } from "./SelectionProvider";
+} from '@shopify/react-native-skia';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import { scheduleOnRN } from 'react-native-worklets';
 
-const HIGHLIGHT_YELLOW = "#FFF176";
-const SELECTION_BLUE = "rgba(0, 122, 255, 0.35)";
+import type { HighlightRead } from '@precis/shared';
+
+import { useSelection, useSelectionSlice, wordBoundsAt } from './SelectionProvider';
+
+const HIGHLIGHT_YELLOW = '#FFF176';
+const SELECTION_BLUE = 'rgba(0, 122, 255, 0.35)';
 const DEFAULT_FONT_SIZE = 15;
 const DEFAULT_LINE_HEIGHT = 24;
-const TEXT_COLOR = "#1a1a1a";
+const TEXT_COLOR = '#1a1a1a';
 
 interface HighlightableTextProps {
   nodeId: string;
@@ -37,7 +41,8 @@ export function HighlightableText({
   lineHeight,
   bold = false,
 }: HighlightableTextProps) {
-  const resolvedLineHeight = lineHeight ?? Math.round(fontSize * (DEFAULT_LINE_HEIGHT / DEFAULT_FONT_SIZE));
+  const resolvedLineHeight =
+    lineHeight ?? Math.round(fontSize * (DEFAULT_LINE_HEIGHT / DEFAULT_FONT_SIZE));
   const {
     registerNode,
     unregisterNode,
@@ -158,7 +163,7 @@ export function HighlightableText({
   return (
     <View ref={viewRef} style={styles.wrapper} onLayout={onLayout} collapsable={false}>
       <GestureDetector gesture={tap}>
-        <Canvas style={{ width: "100%", height }}>
+        <Canvas style={{ width: '100%', height }}>
           {highlightRects.map((r, i) => (
             <Rect
               key={`h-${i}`}
@@ -179,9 +184,7 @@ export function HighlightableText({
               color={SELECTION_BLUE}
             />
           ))}
-          {paragraph && (
-            <Paragraph paragraph={paragraph} x={0} y={0} width={width} />
-          )}
+          {paragraph && <Paragraph paragraph={paragraph} x={0} y={0} width={width} />}
         </Canvas>
       </GestureDetector>
     </View>
@@ -190,6 +193,6 @@ export function HighlightableText({
 
 const styles = StyleSheet.create({
   wrapper: {
-    width: "100%",
+    width: '100%',
   },
 });

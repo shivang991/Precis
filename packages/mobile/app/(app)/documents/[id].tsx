@@ -1,4 +1,5 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+
 import {
   View,
   ScrollView,
@@ -7,21 +8,25 @@ import {
   StyleSheet,
   Alert,
   ActivityIndicator,
-} from "react-native";
-import { useLocalSearchParams, useRouter } from "expo-router";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useApi } from "../../../hooks/useApi";
-import { NodeRenderer } from "../../../components/document/NodeRenderer";
+} from 'react-native';
+
+import { useLocalSearchParams, useRouter } from 'expo-router';
+
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+
+import type { HighlightCreate, HighlightRead } from '@precis/shared';
+
+import { NodeRenderer } from '../../../components/document/NodeRenderer';
 import {
   SelectionProvider,
   SelectionProviderHandle,
   NormalizedSelection,
   NodeSlice,
-} from "../../../components/document/SelectionProvider";
-import type { HighlightCreate, HighlightRead } from "@precis/shared";
+} from '../../../components/document/SelectionProvider';
+import { useApi } from '../../../hooks/useApi';
 
 const FLUSH_DEBOUNCE_MS = 500;
-const TEMP_ID_PREFIX = "temp_";
+const TEMP_ID_PREFIX = 'temp_';
 
 type Remainder = { nodeId: string; start: number; end: number };
 
@@ -32,7 +37,7 @@ export default function DocumentViewerScreen() {
   const qc = useQueryClient();
 
   const { data: document, isLoading: docLoading } = useQuery({
-    queryKey: ["document", id],
+    queryKey: ['document', id],
     queryFn: () => api.getDocument(id),
     enabled: !!id,
   });
@@ -40,22 +45,23 @@ export default function DocumentViewerScreen() {
   const processTriggeredRef = useRef(false);
   useEffect(() => {
     if (!document) return;
-    if (document.status !== "pending" && document.status !== "failed") return;
+    if (document.status !== 'pending' && document.status !== 'failed') return;
     if (processTriggeredRef.current) return;
     processTriggeredRef.current = true;
     api
       .processDocument(id)
-      .then(() => qc.invalidateQueries({ queryKey: ["document", id] }))
-      .catch((e: any) => {
+      .then(() => qc.invalidateQueries({ queryKey: ['document', id] }))
+      .catch((e: unknown) => {
         processTriggeredRef.current = false;
-        Alert.alert("Failed to start processing", e?.message ?? "Unknown error");
+        const msg = e instanceof Error ? e.message : 'Unknown error';
+        Alert.alert('Failed to start processing', msg);
       });
   }, [document, api, id, qc]);
 
   const { data: highlights = [] } = useQuery({
-    queryKey: ["highlights", id],
+    queryKey: ['highlights', id],
     queryFn: () => api.listHighlights(id),
-    enabled: !!id && document?.status === "ready",
+    enabled: !!id && document?.status === 'ready',
   });
 
   const [selection, setSelection] = useState<NormalizedSelection | null>(null);
@@ -86,8 +92,8 @@ export default function DocumentViewerScreen() {
   //   "none"    → no slice has any overlap
   //   "full"    → every slice is fully covered
   //   "partial" → some overlap but at least one gap
-  const coverage: "none" | "full" | "partial" = useMemo(() => {
-    if (!selection || overlappingByNode.length === 0) return "none";
+  const coverage: 'none' | 'full' | 'partial' = useMemo(() => {
+    if (!selection || overlappingByNode.length === 0) return 'none';
     let anyOverlap = false;
     let anyGap = false;
     for (const { slice, overs } of overlappingByNode) {
@@ -112,9 +118,9 @@ export default function DocumentViewerScreen() {
       }
       if (cursor < slice.end) anyGap = true;
     }
-    if (!anyOverlap) return "none";
-    if (!anyGap) return "full";
-    return "partial";
+    if (!anyOverlap) return 'none';
+    if (!anyGap) return 'full';
+    return 'partial';
   }, [selection, overlappingByNode]);
 
   const pendingAddsRef = useRef<Array<{ create: HighlightCreate; tempId: string }>>([]);
@@ -133,18 +139,27 @@ export default function DocumentViewerScreen() {
     pendingRemovalsRef.current = [];
     try {
       const tasks: Promise<unknown>[] = [];
-      if (adds.length) tasks.push(api.addHighlights(id, adds.map((a) => a.create)));
+      if (adds.length)
+        tasks.push(
+          api.addHighlights(
+            id,
+            adds.map((a) => a.create),
+          ),
+        );
       if (removals.length) tasks.push(api.removeHighlights(id, removals));
       await Promise.all(tasks);
-      qc.invalidateQueries({ queryKey: ["highlights", id] });
-    } catch (e: any) {
-      qc.invalidateQueries({ queryKey: ["highlights", id] });
-      Alert.alert("Highlight sync failed", e?.message ?? "Unknown error");
+      qc.invalidateQueries({ queryKey: ['highlights', id] });
+    } catch (e: unknown) {
+      qc.invalidateQueries({ queryKey: ['highlights', id] });
+      const msg = e instanceof Error ? e.message : 'Unknown error';
+      Alert.alert('Highlight sync failed', msg);
     }
   }, [api, id, qc]);
 
   const flushRef = useRef(flush);
-  flushRef.current = flush;
+  useEffect(() => {
+    flushRef.current = flush;
+  });
 
   const scheduleFlush = useCallback(() => {
     if (flushTimer.current) clearTimeout(flushTimer.current);
@@ -177,7 +192,7 @@ export default function DocumentViewerScreen() {
         create: { node_id: r.nodeId, start_offset: r.start, end_offset: r.end },
         tempId,
       });
-      qc.setQueryData<HighlightRead[]>(["highlights", id], (prev = []) => [...prev, optimistic]);
+      qc.setQueryData<HighlightRead[]>(['highlights', id], (prev = []) => [...prev, optimistic]);
       scheduleFlush();
     },
     [id, qc, scheduleFlush],
@@ -195,7 +210,7 @@ export default function DocumentViewerScreen() {
         }
       }
       const idSet = new Set(ids);
-      qc.setQueryData<HighlightRead[]>(["highlights", id], (prev = []) =>
+      qc.setQueryData<HighlightRead[]>(['highlights', id], (prev = []) =>
         prev.filter((h) => !idSet.has(h.id)),
       );
       scheduleFlush();
@@ -218,11 +233,11 @@ export default function DocumentViewerScreen() {
 
   const handleClearPress = () => {
     if (highlights.length === 0) return;
-    Alert.alert("Clear all highlights?", "This will remove every highlight in this document.", [
-      { text: "Cancel", style: "cancel" },
+    Alert.alert('Clear all highlights?', 'This will remove every highlight in this document.', [
+      { text: 'Cancel', style: 'cancel' },
       {
-        text: "Clear",
-        style: "destructive",
+        text: 'Clear',
+        style: 'destructive',
         onPress: () => {
           removeHighlightsByIds(highlights.map((h) => h.id));
           clearUiSelection();
@@ -270,7 +285,7 @@ export default function DocumentViewerScreen() {
     );
   }
 
-  if (document.status !== "ready") {
+  if (document.status !== 'ready') {
     return (
       <View style={styles.center}>
         <ActivityIndicator size="large" />
@@ -281,8 +296,8 @@ export default function DocumentViewerScreen() {
 
   const nodes = document.document_content_tree ?? [];
   const fabVisible = selection != null;
-  const showAdd = coverage !== "full";
-  const showRemove = coverage !== "none";
+  const showAdd = coverage !== 'full';
+  const showRemove = coverage !== 'none';
 
   return (
     <View style={styles.container}>
@@ -300,7 +315,7 @@ export default function DocumentViewerScreen() {
             setHighlighterOn((v) => !v);
           }}
         >
-          <Text style={styles.toolBtnText}>Highlighter: {highlighterOn ? "On" : "Off"}</Text>
+          <Text style={styles.toolBtnText}>Highlighter: {highlighterOn ? 'On' : 'Off'}</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -349,47 +364,47 @@ export default function DocumentViewerScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#fff" },
-  center: { flex: 1, justifyContent: "center", alignItems: "center" },
-  processingText: { marginTop: 12, color: "#666" },
+  container: { flex: 1, backgroundColor: '#fff' },
+  center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  processingText: { marginTop: 12, color: '#666' },
   toolbar: {
-    flexDirection: "row",
-    alignItems: "center",
+    flexDirection: 'row',
+    alignItems: 'center',
     padding: 8,
     gap: 8,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: "#e0e0e0",
-    flexWrap: "wrap",
+    borderBottomColor: '#e0e0e0',
+    flexWrap: 'wrap',
   },
   toolBtn: {
     paddingVertical: 6,
     paddingHorizontal: 12,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: "#ccc",
+    borderColor: '#ccc',
   },
-  toolBtnText: { fontSize: 13, color: "#333" },
+  toolBtnText: { fontSize: 13, color: '#333' },
   scroll: { flex: 1 },
   content: { padding: 16, paddingBottom: 96 },
   fabRow: {
-    position: "absolute",
+    position: 'absolute',
     left: 20,
     right: 20,
     bottom: 24,
-    flexDirection: "row",
+    flexDirection: 'row',
     gap: 12,
   },
   fab: {
-    backgroundColor: "#1a1a1a",
+    backgroundColor: '#1a1a1a',
     paddingVertical: 14,
     borderRadius: 12,
-    alignItems: "center",
-    shadowColor: "#000",
+    alignItems: 'center',
+    shadowColor: '#000',
     shadowOpacity: 0.2,
     shadowRadius: 8,
     shadowOffset: { width: 0, height: 4 },
     elevation: 6,
   },
   fabFlex: { flex: 1 },
-  fabText: { color: "#fff", fontSize: 15, fontWeight: "600" },
+  fabText: { color: '#fff', fontSize: 15, fontWeight: '600' },
 });

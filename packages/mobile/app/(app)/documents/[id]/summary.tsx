@@ -1,4 +1,5 @@
-import React, { useMemo } from "react";
+import React, { useMemo } from 'react';
+
 import {
   View,
   ScrollView,
@@ -7,14 +8,15 @@ import {
   StyleSheet,
   ActivityIndicator,
   ViewStyle,
-} from "react-native";
-import { useLocalSearchParams, useRouter } from "expo-router";
-import { useQuery } from "@tanstack/react-query";
-import { useApi } from "../../../../hooks/useApi";
-import type {
-  DocumentContentTreeNodeOutput,
-  HighlightRead,
-} from "@precis/shared";
+} from 'react-native';
+
+import { useLocalSearchParams, useRouter } from 'expo-router';
+
+import { useQuery } from '@tanstack/react-query';
+
+import type { DocumentContentTreeNodeOutput, HighlightRead } from '@precis/shared';
+
+import { useApi } from '../../../../hooks/useApi';
 
 export default function SummaryViewScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -22,15 +24,15 @@ export default function SummaryViewScreen() {
   const api = useApi();
 
   const { data: document, isLoading: docLoading } = useQuery({
-    queryKey: ["document", id],
+    queryKey: ['document', id],
     queryFn: () => api.getDocument(id),
     enabled: !!id,
   });
 
   const { data: highlights = [], isLoading: hlLoading } = useQuery({
-    queryKey: ["highlights", id],
+    queryKey: ['highlights', id],
     queryFn: () => api.listHighlights(id),
-    enabled: !!id && document?.status === "ready",
+    enabled: !!id && document?.status === 'ready',
   });
 
   const highlightsByNode = useMemo(() => {
@@ -72,9 +74,7 @@ export default function SummaryViewScreen() {
             No highlights yet. Go back and highlight passages to build your summary.
           </Text>
         ) : (
-          nodes.map((n) => (
-            <RenderNode key={n.id} node={n} highlightsByNode={highlightsByNode} />
-          ))
+          nodes.map((n) => <RenderNode key={n.id} node={n} highlightsByNode={highlightsByNode} />)
         )}
       </ScrollView>
     </View>
@@ -107,13 +107,13 @@ function RenderNode({
   const nodeHighlights = highlightsByNode.get(node.id);
 
   switch (node.type) {
-    case "heading": {
+    case 'heading': {
       const level = node.level ?? 1;
       const typo = headingTypography[level] ?? headingTypography[1];
       return (
         <View style={[styles.headingContainer, headingSpacing[level] ?? headingSpacing[1]]}>
           <Text style={[{ fontSize: typo.fontSize, lineHeight: typo.lineHeight }, styles.heading]}>
-            {node.text ?? ""}
+            {node.text ?? ''}
           </Text>
           {node.children?.map((c) => (
             <RenderNode key={c.id} node={c} highlightsByNode={highlightsByNode} />
@@ -122,14 +122,14 @@ function RenderNode({
       );
     }
 
-    case "paragraph":
+    case 'paragraph':
       return nodeHighlights ? (
         <View style={styles.paragraphContainer}>
-          <HighlightedSpans text={node.text ?? ""} highlights={nodeHighlights} />
+          <HighlightedSpans text={node.text ?? ''} highlights={nodeHighlights} />
         </View>
       ) : null;
 
-    case "list_item":
+    case 'list_item':
       return nodeHighlights ? (
         <View
           style={[
@@ -139,20 +139,16 @@ function RenderNode({
         >
           <Text style={styles.bullet}>•</Text>
           <View style={styles.listItemText}>
-            <HighlightedSpans text={node.text ?? ""} highlights={nodeHighlights} />
+            <HighlightedSpans text={node.text ?? ''} highlights={nodeHighlights} />
           </View>
         </View>
       ) : null;
 
-    case "code":
+    case 'code':
       return nodeHighlights ? (
         <View style={styles.codeBlock}>
           <Text style={styles.codeText}>
-            <HighlightedSpans
-              text={node.text ?? ""}
-              highlights={nodeHighlights}
-              monospace
-            />
+            <HighlightedSpans text={node.text ?? ''} highlights={nodeHighlights} monospace />
           </Text>
         </View>
       ) : null;
@@ -177,10 +173,7 @@ function HighlightedSpans({
   return (
     <View style={styles.spans}>
       {highlights.map((h) => (
-        <Text
-          key={h.id}
-          style={[styles.highlighted, monospace && styles.codeText]}
-        >
+        <Text key={h.id} style={[styles.highlighted, monospace && styles.codeText]}>
           {text.substring(h.start_offset!, h.end_offset!)}
         </Text>
       ))}
@@ -207,41 +200,41 @@ const headingSpacing: Record<number, ViewStyle> = {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#fff" },
-  center: { flex: 1, justifyContent: "center", alignItems: "center" },
+  container: { flex: 1, backgroundColor: '#fff' },
+  center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   toolbar: {
-    flexDirection: "row",
+    flexDirection: 'row',
     gap: 8,
     padding: 8,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: "#e0e0e0",
+    borderBottomColor: '#e0e0e0',
   },
   toolBtn: {
     paddingVertical: 6,
     paddingHorizontal: 12,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: "#ccc",
+    borderColor: '#ccc',
   },
-  toolBtnText: { fontSize: 13, color: "#333" },
+  toolBtnText: { fontSize: 13, color: '#333' },
   scroll: { flex: 1 },
   content: { padding: 16, paddingBottom: 48 },
   headingContainer: {},
-  heading: { fontWeight: "700", color: "#1a1a1a" },
+  heading: { fontWeight: '700', color: '#1a1a1a' },
   paragraphContainer: { marginBottom: 12 },
-  listItem: { flexDirection: "row", marginBottom: 6, alignItems: "flex-start" },
+  listItem: { flexDirection: 'row', marginBottom: 6, alignItems: 'flex-start' },
   listItemText: { flex: 1 },
-  bullet: { marginRight: 6, color: "#555", lineHeight: 22 },
-  codeBlock: { backgroundColor: "#f5f5f5", padding: 12, borderRadius: 6, marginVertical: 8 },
-  codeText: { fontFamily: "monospace", fontSize: 13, color: "#333" },
+  bullet: { marginRight: 6, color: '#555', lineHeight: 22 },
+  codeBlock: { backgroundColor: '#f5f5f5', padding: 12, borderRadius: 6, marginVertical: 8 },
+  codeText: { fontFamily: 'monospace', fontSize: 13, color: '#333' },
   spans: { gap: 4 },
   highlighted: {
     fontSize: 15,
     lineHeight: 24,
-    color: "#1a1a1a",
-    backgroundColor: "#FFF176",
+    color: '#1a1a1a',
+    backgroundColor: '#FFF176',
     borderRadius: 3,
     paddingHorizontal: 2,
   },
-  empty: { textAlign: "center", color: "#999", marginTop: 64, lineHeight: 24 },
+  empty: { textAlign: 'center', color: '#999', marginTop: 64, lineHeight: 24 },
 });

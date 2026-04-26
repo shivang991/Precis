@@ -1,7 +1,10 @@
-import React from "react";
-import { View, Text, StyleSheet, ViewStyle } from "react-native";
-import type { DocumentContentTreeNodeOutput, HighlightRead } from "@precis/shared";
-import { HighlightableText } from "./HighlightableText";
+import React from 'react';
+
+import { View, Text, StyleSheet, ViewStyle } from 'react-native';
+
+import type { DocumentContentTreeNodeOutput, HighlightRead } from '@precis/shared';
+
+import { HighlightableText } from './HighlightableText';
 
 interface NodeRendererProps {
   nodes: DocumentContentTreeNodeOutput[];
@@ -28,14 +31,14 @@ function RenderNode({
   const nodeHighlights = highlights.filter((h) => h.node_id === node.id);
 
   switch (node.type) {
-    case "heading": {
+    case 'heading': {
       const level = node.level ?? 1;
       const typo = headingTypography[level] ?? headingTypography[1];
       return (
         <View style={[styles.headingContainer, headingSpacing[level] ?? headingSpacing[1]]}>
           <HighlightableText
             nodeId={node.id}
-            text={node.text ?? ""}
+            text={node.text ?? ''}
             highlights={nodeHighlights}
             fontSize={typo.fontSize}
             lineHeight={typo.lineHeight}
@@ -48,48 +51,49 @@ function RenderNode({
       );
     }
 
-    case "paragraph":
+    case 'paragraph':
       return (
         <View style={styles.paragraphContainer}>
-          <HighlightableText
-            nodeId={node.id}
-            text={node.text ?? ""}
-            highlights={nodeHighlights}
-          />
+          <HighlightableText nodeId={node.id} text={node.text ?? ''} highlights={nodeHighlights} />
         </View>
       );
 
-    case "list_item":
+    case 'list_item':
       return (
-        <View style={[styles.listItem, { paddingLeft: ((node.content?.depth as number) ?? 0) * 16 + 8 }]}>
+        <View
+          style={[
+            styles.listItem,
+            { paddingLeft: ((node.content?.depth as number) ?? 0) * 16 + 8 },
+          ]}
+        >
           <Text style={styles.bullet}>•</Text>
-          <HighlightableText
-            nodeId={node.id}
-            text={node.text ?? ""}
-            highlights={nodeHighlights}
-          />
+          <HighlightableText nodeId={node.id} text={node.text ?? ''} highlights={nodeHighlights} />
         </View>
       );
 
-    case "table":
+    case 'table':
       return (
         <View style={styles.table}>
           <View style={styles.tableRow}>
             {((node.content?.headers as string[]) ?? []).map((h, i) => (
-              <Text key={i} style={styles.tableHeader}>{h}</Text>
+              <Text key={i} style={styles.tableHeader}>
+                {h}
+              </Text>
             ))}
           </View>
           {((node.content?.rows as string[][]) ?? []).map((row, ri) => (
             <View key={ri} style={styles.tableRow}>
               {row.map((cell, ci) => (
-                <Text key={ci} style={styles.tableCell}>{cell}</Text>
+                <Text key={ci} style={styles.tableCell}>
+                  {cell}
+                </Text>
               ))}
             </View>
           ))}
         </View>
       );
 
-    case "code":
+    case 'code':
       return (
         <View style={styles.codeBlock}>
           <Text style={styles.codeText}>{node.text}</Text>
@@ -122,12 +126,16 @@ const headingSpacing: Record<number, ViewStyle> = {
 const styles = StyleSheet.create({
   headingContainer: {},
   paragraphContainer: { marginBottom: 12 },
-  listItem: { flexDirection: "row", marginBottom: 6, alignItems: "flex-start" },
-  bullet: { marginRight: 6, color: "#555", lineHeight: 22 },
-  table: { marginVertical: 12, borderWidth: 1, borderColor: "#ddd", borderRadius: 4 },
-  tableRow: { flexDirection: "row", borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: "#ddd" },
-  tableHeader: { flex: 1, padding: 8, fontWeight: "600", fontSize: 13, backgroundColor: "#f5f5f5" },
+  listItem: { flexDirection: 'row', marginBottom: 6, alignItems: 'flex-start' },
+  bullet: { marginRight: 6, color: '#555', lineHeight: 22 },
+  table: { marginVertical: 12, borderWidth: 1, borderColor: '#ddd', borderRadius: 4 },
+  tableRow: {
+    flexDirection: 'row',
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#ddd',
+  },
+  tableHeader: { flex: 1, padding: 8, fontWeight: '600', fontSize: 13, backgroundColor: '#f5f5f5' },
   tableCell: { flex: 1, padding: 8, fontSize: 13 },
-  codeBlock: { backgroundColor: "#f5f5f5", padding: 12, borderRadius: 6, marginVertical: 8 },
-  codeText: { fontFamily: "monospace", fontSize: 13, color: "#333" },
+  codeBlock: { backgroundColor: '#f5f5f5', padding: 12, borderRadius: 6, marginVertical: 8 },
+  codeText: { fontFamily: 'monospace', fontSize: 13, color: '#333' },
 });

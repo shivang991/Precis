@@ -10,15 +10,18 @@ import React, {
   useRef,
   useState,
   useSyncExternalStore,
-} from "react";
-import { StyleSheet, View } from "react-native";
-import type { SkParagraph } from "@shopify/react-native-skia";
-import { Gesture, GestureDetector } from "react-native-gesture-handler";
-import { scheduleOnRN } from "react-native-worklets";
+} from 'react';
+
+import { StyleSheet, View } from 'react-native';
+
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import { scheduleOnRN } from 'react-native-worklets';
+
+import type { SkParagraph } from '@shopify/react-native-skia';
 
 const HANDLE_SIZE = 14;
 const HANDLE_HIT_SLOP = 40;
-const HANDLE_COLOR = "#007AFF";
+const HANDLE_COLOR = '#007AFF';
 const LINE_HEIGHT = 24;
 
 export type Endpoint = { nodeId: string; offset: number };
@@ -64,8 +67,7 @@ const SelectionContext = createContext<SelectionContextValue | null>(null);
 
 export function useSelection(): SelectionContextValue {
   const ctx = useContext(SelectionContext);
-  if (!ctx)
-    throw new Error("useSelection must be used inside SelectionProvider");
+  if (!ctx) throw new Error('useSelection must be used inside SelectionProvider');
   return ctx;
 }
 
@@ -73,10 +75,7 @@ export function useSelection(): SelectionContextValue {
  * Per-node slice subscription. Returns a stable reference when the slice
  * hasn't changed so the consuming component skips re-rendering.
  */
-export function useSelectionSlice(
-  nodeId: string,
-  textLength: number,
-): SliceRange {
+export function useSelectionSlice(nodeId: string, textLength: number): SliceRange {
   const { subscribe, getSelection, orderOf } = useSelection();
   const lastRef = useRef<SliceRange>(null);
 
@@ -86,10 +85,7 @@ export function useSelectionSlice(
     const prev = lastRef.current;
     if (
       (prev === null && next === null) ||
-      (prev !== null &&
-        next !== null &&
-        prev.start === next.start &&
-        prev.end === next.end)
+      (prev !== null && next !== null && prev.start === next.start && prev.end === next.end)
     ) {
       return prev;
     }
@@ -114,10 +110,7 @@ function computeSlice(
   if (aOrder < 0 || fOrder < 0) return null;
   let sEp = sel.anchor;
   let eEp = sel.focus;
-  if (
-    aOrder > fOrder ||
-    (aOrder === fOrder && sel.anchor.offset > sel.focus.offset)
-  ) {
+  if (aOrder > fOrder || (aOrder === fOrder && sel.anchor.offset > sel.focus.offset)) {
     sEp = sel.focus;
     eEp = sel.anchor;
   }
@@ -143,10 +136,7 @@ interface Props {
 }
 
 export const SelectionProvider = forwardRef<SelectionProviderHandle, Props>(
-  function SelectionProvider(
-    { children, disabled = false, onSelectionChange },
-    ref,
-  ) {
+  function SelectionProvider({ children, disabled = false, onSelectionChange }, ref) {
     const rootRef = useRef<View>(null);
     const registryRef = useRef<Map<string, NodeEntry>>(new Map());
     const orderMapRef = useRef<Map<string, number>>(new Map());
@@ -172,12 +162,10 @@ export const SelectionProvider = forwardRef<SelectionProviderHandle, Props>(
     }, []);
 
     const setSelection = useCallback(
-      (
-        next: Selection | null | ((prev: Selection | null) => Selection | null),
-      ) => {
+      (next: Selection | null | ((prev: Selection | null) => Selection | null)) => {
         const prev = selectionRef.current;
         const value =
-          typeof next === "function"
+          typeof next === 'function'
             ? (next as (p: Selection | null) => Selection | null)(prev)
             : next;
         if (prev === value) return;
@@ -188,7 +176,9 @@ export const SelectionProvider = forwardRef<SelectionProviderHandle, Props>(
     );
 
     const onSelectionChangeRef = useRef(onSelectionChange);
-    onSelectionChangeRef.current = onSelectionChange;
+    useEffect(() => {
+      onSelectionChangeRef.current = onSelectionChange;
+    });
 
     const recomputeOrder = useCallback(() => {
       const entries = Array.from(registryRef.current.values()).sort(
@@ -218,10 +208,7 @@ export const SelectionProvider = forwardRef<SelectionProviderHandle, Props>(
       [recomputeOrder],
     );
 
-    const orderOf = useCallback(
-      (nodeId: string) => orderMapRef.current.get(nodeId) ?? -1,
-      [],
-    );
+    const orderOf = useCallback((nodeId: string) => orderMapRef.current.get(nodeId) ?? -1, []);
 
     const emit = useCallback((sel: Selection | null) => {
       if (!sel) {
@@ -254,9 +241,7 @@ export const SelectionProvider = forwardRef<SelectionProviderHandle, Props>(
       emit(null);
     }, [emit, setSelection]);
 
-    useImperativeHandle(ref, () => ({ clear: clearSelection }), [
-      clearSelection,
-    ]);
+    useImperativeHandle(ref, () => ({ clear: clearSelection }), [clearSelection]);
 
     useEffect(() => {
       if (disabled) {
@@ -279,14 +264,11 @@ export const SelectionProvider = forwardRef<SelectionProviderHandle, Props>(
       return best;
     }, []);
 
-    const hitTestPos = useCallback(
-      (entry: NodeEntry, x: number, y: number): number => {
-        const lx = Math.max(0, Math.min(entry.width, x - entry.x));
-        const ly = Math.max(0, Math.min(entry.height, y - entry.y));
-        return entry.paragraph.getGlyphPositionAtCoordinate(lx, ly);
-      },
-      [],
-    );
+    const hitTestPos = useCallback((entry: NodeEntry, x: number, y: number): number => {
+      const lx = Math.max(0, Math.min(entry.width, x - entry.x));
+      const ly = Math.max(0, Math.min(entry.height, y - entry.y));
+      return entry.paragraph.getGlyphPositionAtCoordinate(lx, ly);
+    }, []);
 
     const handleDragStart = useCallback(
       (x: number, y: number) => {
@@ -330,12 +312,7 @@ export const SelectionProvider = forwardRef<SelectionProviderHandle, Props>(
     const handleOuterTap = useCallback(
       (x: number, y: number) => {
         for (const e of registryRef.current.values()) {
-          if (
-            y >= e.y &&
-            y <= e.y + e.height &&
-            x >= e.x &&
-            x <= e.x + e.width
-          ) {
+          if (y >= e.y && y <= e.y + e.height && x >= e.x && x <= e.x + e.width) {
             // Tap landed on a registered node; let the node's own tap handle it.
             return;
           }
@@ -345,6 +322,7 @@ export const SelectionProvider = forwardRef<SelectionProviderHandle, Props>(
       [clearSelection],
     );
 
+    /* eslint-disable react-hooks/refs -- gesture callbacks are invoked outside render */
     const outerTap = useMemo(
       () =>
         Gesture.Tap()
@@ -372,14 +350,12 @@ export const SelectionProvider = forwardRef<SelectionProviderHandle, Props>(
           }),
       [disabled, handleDragStart, handleDragUpdate, handleDragEnd],
     );
+    /* eslint-enable react-hooks/refs */
 
-    const rootGesture = useMemo(
-      () => Gesture.Simultaneous(pan, outerTap),
-      [pan, outerTap],
-    );
+    const rootGesture = useMemo(() => Gesture.Simultaneous(pan, outerTap), [pan, outerTap]);
 
     const handleAnchorRef = useRef<{
-      which: "left" | "right";
+      which: 'left' | 'right';
       x: number;
       y: number;
     } | null>(null);
@@ -389,7 +365,7 @@ export const SelectionProvider = forwardRef<SelectionProviderHandle, Props>(
       right: { x: number; y: number };
     } | null>(null);
 
-    const onHandleStart = useCallback((which: "left" | "right") => {
+    const onHandleStart = useCallback((which: 'left' | 'right') => {
       const anchors = handleAnchorsRef.current;
       if (!anchors) return;
       handleAnchorRef.current = { which, ...anchors[which] };
@@ -406,13 +382,9 @@ export const SelectionProvider = forwardRef<SelectionProviderHandle, Props>(
         const pos = hitTestPos(entry, px, py);
         setSelection((prev) => {
           if (!prev) return prev;
-          const norm = normalize(
-            prev,
-            orderMapRef.current,
-            registryRef.current,
-          );
+          const norm = normalize(prev, orderMapRef.current, registryRef.current);
           if (!norm) return prev;
-          const other = a.which === "left" ? norm.end : norm.start;
+          const other = a.which === 'left' ? norm.end : norm.start;
           const moved: Endpoint = { nodeId: entry.nodeId, offset: pos };
           return { anchor: other, focus: moved };
         });
@@ -424,11 +396,12 @@ export const SelectionProvider = forwardRef<SelectionProviderHandle, Props>(
       emit(selectionRef.current);
     }, [emit]);
 
+    /* eslint-disable react-hooks/refs -- gesture callbacks are invoked outside render */
     const leftHandleGesture = useMemo(
       () =>
         Gesture.Pan()
           .onStart(() => {
-            scheduleOnRN(onHandleStart, "left");
+            scheduleOnRN(onHandleStart, 'left');
           })
           .onUpdate((e) => {
             scheduleOnRN(onHandleMove, e.translationX, e.translationY);
@@ -443,7 +416,7 @@ export const SelectionProvider = forwardRef<SelectionProviderHandle, Props>(
       () =>
         Gesture.Pan()
           .onStart(() => {
-            scheduleOnRN(onHandleStart, "right");
+            scheduleOnRN(onHandleStart, 'right');
           })
           .onUpdate((e) => {
             scheduleOnRN(onHandleMove, e.translationX, e.translationY);
@@ -453,6 +426,7 @@ export const SelectionProvider = forwardRef<SelectionProviderHandle, Props>(
           }),
       [onHandleStart, onHandleMove, onHandleEnd],
     );
+    /* eslint-enable react-hooks/refs */
 
     const getRootView = useCallback(() => rootRef.current, []);
 
@@ -531,36 +505,15 @@ function SelectionHandles({
 }: SelectionHandlesProps) {
   const selection = useSyncExternalStore(subscribe, getSelection);
 
-  const anchors = useMemo(() => {
-    if (!selection) return null;
-    const norm = normalize(selection, orderMapRef.current, registryRef.current);
-    if (!norm || norm.slices.length === 0) return null;
-    const first = norm.slices[0];
-    const last = norm.slices[norm.slices.length - 1];
-    const firstEntry = registryRef.current.get(first.nodeId);
-    const lastEntry = registryRef.current.get(last.nodeId);
-    if (!firstEntry || !lastEntry) return null;
-    const firstRects = firstEntry.paragraph.getRectsForRange(
-      first.start,
-      first.end,
-    );
-    const lastRects = lastEntry.paragraph.getRectsForRange(
-      last.start,
-      last.end,
-    );
-    if (firstRects.length === 0 || lastRects.length === 0) return null;
-    const fr = firstRects[0];
-    const lr = lastRects[lastRects.length - 1];
-    return {
-      left: { x: firstEntry.x + fr.x, y: firstEntry.y + fr.y + fr.height },
-      right: {
-        x: lastEntry.x + lr.x + lr.width,
-        y: lastEntry.y + lr.y + lr.height,
-      },
-    };
-    // orderVersion/registryRef/orderMapRef are refs; orderVersion triggers recompute
-  }, [selection, orderVersion, registryRef, orderMapRef]);
+  const anchors = useMemo(
+    () => computeAnchors(selection, orderMapRef, registryRef),
+    // orderVersion intentionally listed: bumping it forces recompute when the
+    // node registry mutates (refs alone don't trigger re-evaluation).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [selection, orderVersion, registryRef, orderMapRef],
+  );
 
+  // eslint-disable-next-line react-hooks/immutability -- exposing computed anchors to parent ref
   anchorsOut.current = anchors;
   if (!anchors) return null;
 
@@ -594,6 +547,33 @@ function SelectionHandles({
   );
 }
 
+function computeAnchors(
+  selection: Selection | null,
+  orderMapRef: React.RefObject<Map<string, number>>,
+  registryRef: React.RefObject<Map<string, NodeEntry>>,
+): { left: { x: number; y: number }; right: { x: number; y: number } } | null {
+  if (!selection) return null;
+  const norm = normalize(selection, orderMapRef.current, registryRef.current);
+  if (!norm || norm.slices.length === 0) return null;
+  const first = norm.slices[0];
+  const last = norm.slices[norm.slices.length - 1];
+  const firstEntry = registryRef.current.get(first.nodeId);
+  const lastEntry = registryRef.current.get(last.nodeId);
+  if (!firstEntry || !lastEntry) return null;
+  const firstRects = firstEntry.paragraph.getRectsForRange(first.start, first.end);
+  const lastRects = lastEntry.paragraph.getRectsForRange(last.start, last.end);
+  if (firstRects.length === 0 || lastRects.length === 0) return null;
+  const fr = firstRects[0];
+  const lr = lastRects[lastRects.length - 1];
+  return {
+    left: { x: firstEntry.x + fr.x, y: firstEntry.y + fr.y + fr.height },
+    right: {
+      x: lastEntry.x + lr.x + lr.width,
+      y: lastEntry.y + lr.y + lr.height,
+    },
+  };
+}
+
 function normalize(
   sel: Selection,
   orderMap: Map<string, number>,
@@ -605,10 +585,7 @@ function normalize(
 
   let start: Endpoint;
   let end: Endpoint;
-  if (
-    aOrder < fOrder ||
-    (aOrder === fOrder && sel.anchor.offset <= sel.focus.offset)
-  ) {
+  if (aOrder < fOrder || (aOrder === fOrder && sel.anchor.offset <= sel.focus.offset)) {
     start = sel.anchor;
     end = sel.focus;
   } else {
@@ -638,10 +615,7 @@ function normalize(
   return { start, end, slices };
 }
 
-export function wordBoundsAt(
-  text: string,
-  pos: number,
-): { start: number; end: number } {
+export function wordBoundsAt(text: string, pos: number): { start: number; end: number } {
   const isWord = (c: string) => /\S/.test(c);
   const n = text.length;
   if (n === 0) return { start: 0, end: 0 };
@@ -659,7 +633,7 @@ export function wordBoundsAt(
 
 const styles = StyleSheet.create({
   handle: {
-    position: "absolute",
+    position: 'absolute',
     width: HANDLE_SIZE,
     height: HANDLE_SIZE,
     borderRadius: HANDLE_SIZE / 2,

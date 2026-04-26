@@ -1,6 +1,6 @@
-import { create } from "zustand";
+import { create } from 'zustand';
 
-type HighlightMode = "view" | "highlight";
+type HighlightMode = 'view' | 'highlight';
 
 interface DocumentUIState {
   highlightMode: HighlightMode;
@@ -10,8 +10,8 @@ interface DocumentUIState {
 }
 
 export const useDocumentStore = create<DocumentUIState>((set) => ({
-  highlightMode: "view",
-  activeColor: "yellow",
+  highlightMode: 'view',
+  activeColor: 'yellow',
   setHighlightMode: (mode) => set({ highlightMode: mode }),
   setActiveColor: (color) => set({ activeColor: color }),
 }));
