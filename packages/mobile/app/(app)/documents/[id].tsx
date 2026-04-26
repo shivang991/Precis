@@ -15,6 +15,8 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 import type {
+  ImageHighlightCreate,
+  ImageHighlightRead,
   TableHighlightCreate,
   TableHighlightRead,
   TextHighlightCreate,
@@ -70,7 +72,8 @@ export default function DocumentViewerScreen() {
   });
 
   const textHighlights = useMemo(
-    () => highlights.filter((h): h is TextHighlightRead => h.type !== 'table'),
+    () =>
+      highlights.filter((h): h is TextHighlightRead => h.type !== 'table' && h.type !== 'image'),
     [highlights],
   );
 
@@ -134,7 +137,10 @@ export default function DocumentViewerScreen() {
   }, [selection, overlappingByNode]);
 
   const pendingAddsRef = useRef<
-    Array<{ create: TextHighlightCreate | TableHighlightCreate; tempId: string }>
+    Array<{
+      create: TextHighlightCreate | TableHighlightCreate | ImageHighlightCreate;
+      tempId: string;
+    }>
   >([]);
   const pendingRemovalsRef = useRef<string[]>([]);
   const flushTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -277,6 +283,35 @@ export default function DocumentViewerScreen() {
     [highlights, removeHighlightsByIds, addTableHighlight],
   );
 
+  const handleToggleImage = useCallback(
+    (nodeId: string) => {
+      const existing = highlights.filter(
+        (h): h is ImageHighlightRead => h.type === 'image' && h.node_id === nodeId,
+      );
+      if (existing.length > 0) {
+        removeHighlightsByIds(existing.map((h) => h.id));
+        return;
+      }
+      const tempId = `${TEMP_ID_PREFIX}${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+      const now = new Date().toISOString();
+      const optimistic: ImageHighlightRead = {
+        type: 'image',
+        id: tempId,
+        document_id: id,
+        node_id: nodeId,
+        created_at: now,
+        updated_at: now,
+      };
+      pendingAddsRef.current.push({
+        create: { type: 'image', node_id: nodeId },
+        tempId,
+      });
+      qc.setQueryData<Highlight[]>(['highlights', id], (prev = []) => [...prev, optimistic]);
+      scheduleFlush();
+    },
+    [highlights, id, qc, removeHighlightsByIds, scheduleFlush],
+  );
+
   const clearUiSelection = () => {
     selectionProviderRef.current?.clear();
     setSelection(null);
@@ -396,6 +431,7 @@ export default function DocumentViewerScreen() {
             nodes={nodes}
             highlights={highlights}
             onToggleTableHeader={handleToggleTableHeader}
+            onToggleImage={handleToggleImage}
           />
         </SelectionProvider>
       </ScrollView>

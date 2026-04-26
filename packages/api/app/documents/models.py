@@ -73,6 +73,9 @@ class Document(Base):
     table_highlights: Mapped[list["TableHighlight"]] = relationship(  # noqa: F821
         back_populates="document", cascade="all, delete-orphan"
     )
+    image_highlights: Mapped[list["ImageHighlight"]] = relationship(  # noqa: F821
+        back_populates="document", cascade="all, delete-orphan"
+    )
     nodes: Mapped[list["DocumentNode"]] = relationship(
         back_populates="document",
         cascade="all, delete-orphan",

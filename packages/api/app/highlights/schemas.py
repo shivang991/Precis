@@ -49,11 +49,27 @@ class TableHighlightRead(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class ImageHighlightCreate(BaseModel):
+    type: Literal["image"] = "image"
+    node_id: uuid.UUID
+
+
+class ImageHighlightRead(BaseModel):
+    type: Literal["image"] = "image"
+    id: uuid.UUID
+    document_id: uuid.UUID
+    node_id: uuid.UUID
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
 HighlightCreate = Annotated[
-    TextHighlightCreate | TableHighlightCreate,
+    TextHighlightCreate | TableHighlightCreate | ImageHighlightCreate,
     Field(discriminator="type"),
 ]
 HighlightRead = Annotated[
-    TextHighlightRead | TableHighlightRead,
+    TextHighlightRead | TableHighlightRead | ImageHighlightRead,
     Field(discriminator="type"),
 ]

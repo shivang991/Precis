@@ -4,21 +4,28 @@ import { View, Text, StyleSheet, TouchableOpacity, ViewStyle } from 'react-nativ
 
 import type {
   DocumentContentTreeNodeOutput,
+  ImageHighlightRead,
   TableHighlightRead,
   TextHighlightRead,
 } from '@precis/shared';
 
 import { HighlightableText } from './HighlightableText';
 
-export type Highlight = TextHighlightRead | TableHighlightRead;
+export type Highlight = TextHighlightRead | TableHighlightRead | ImageHighlightRead;
 
 interface NodeRendererProps {
   nodes: DocumentContentTreeNodeOutput[];
   highlights: Highlight[];
   onToggleTableHeader?: (nodeId: string, kind: 'row' | 'column', index: number) => void;
+  onToggleImage?: (nodeId: string) => void;
 }
 
-export function NodeRenderer({ nodes, highlights, onToggleTableHeader }: NodeRendererProps) {
+export function NodeRenderer({
+  nodes,
+  highlights,
+  onToggleTableHeader,
+  onToggleImage,
+}: NodeRendererProps) {
   return (
     <>
       {nodes.map((node) => (
@@ -27,6 +34,7 @@ export function NodeRenderer({ nodes, highlights, onToggleTableHeader }: NodeRen
           node={node}
           highlights={highlights}
           onToggleTableHeader={onToggleTableHeader}
+          onToggleImage={onToggleImage}
         />
       ))}
     </>
@@ -41,14 +49,20 @@ function isTableHighlight(h: Highlight): h is TableHighlightRead {
   return h.type === 'table';
 }
 
+function isImageHighlight(h: Highlight): h is ImageHighlightRead {
+  return h.type === 'image';
+}
+
 function RenderNode({
   node,
   highlights,
   onToggleTableHeader,
+  onToggleImage,
 }: {
   node: DocumentContentTreeNodeOutput;
   highlights: Highlight[];
   onToggleTableHeader?: (nodeId: string, kind: 'row' | 'column', index: number) => void;
+  onToggleImage?: (nodeId: string) => void;
 }) {
   const content = node.content;
 
@@ -75,6 +89,7 @@ function RenderNode({
                 nodes={node.children}
                 highlights={highlights}
                 onToggleTableHeader={onToggleTableHeader}
+                onToggleImage={onToggleImage}
               />
             )}
           </View>
@@ -147,6 +162,21 @@ function RenderNode({
       );
     }
 
+    case 'image': {
+      const isHighlighted = highlights.filter(isImageHighlight).some((h) => h.node_id === node.id);
+      const alt = content.alt ?? 'Image';
+      return (
+        <TouchableOpacity
+          activeOpacity={0.7}
+          onPress={() => onToggleImage?.(node.id)}
+          style={[styles.imageWrapper, isHighlighted ? styles.imageWrapperHighlighted : null]}
+        >
+          <Text style={styles.imagePlaceholderLabel}>IMAGE</Text>
+          <Text style={styles.imagePlaceholderAlt}>{alt}</Text>
+        </TouchableOpacity>
+      );
+    }
+
     default:
       return null;
   }
@@ -198,4 +228,27 @@ const styles = StyleSheet.create({
   },
   rowIndexText: { fontSize: 11, color: '#888', fontWeight: '600' },
   headerSelected: { backgroundColor: '#FFE082' },
+  imageWrapper: {
+    marginVertical: 12,
+    paddingVertical: 24,
+    paddingHorizontal: 16,
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 6,
+    backgroundColor: '#fafafa',
+    alignItems: 'center',
+  },
+  imageWrapperHighlighted: {
+    backgroundColor: '#FFF8C4',
+    borderColor: '#FFC107',
+    borderWidth: 2,
+  },
+  imagePlaceholderLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#999',
+    letterSpacing: 1,
+    marginBottom: 4,
+  },
+  imagePlaceholderAlt: { fontSize: 13, color: '#555' },
 });

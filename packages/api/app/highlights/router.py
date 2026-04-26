@@ -6,10 +6,11 @@ from fastapi import APIRouter, Body, Depends, status
 from app.users import User, get_current_user
 
 from .dependencies import get_highlight_service
-from .models import TableHighlight, TextHighlight
+from .models import ImageHighlight, TableHighlight, TextHighlight
 from .schemas import (
     HighlightCreate,
     HighlightRead,
+    ImageHighlightRead,
     TableHighlightRead,
     TextHighlightRead,
 )
@@ -23,6 +24,8 @@ def _to_read(row: Any) -> HighlightRead:
         return TextHighlightRead.model_validate(row)
     if isinstance(row, TableHighlight):
         return TableHighlightRead.model_validate(row)
+    if isinstance(row, ImageHighlight):
+        return ImageHighlightRead.model_validate(row)
     raise TypeError(f"Unknown highlight row type: {type(row).__name__}")
 
 
