@@ -14,7 +14,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 
 import { useQuery } from '@tanstack/react-query';
 
-import type { DocumentContentTreeNodeOutput, HighlightRead } from '@precis/shared';
+import type { DocumentContentTreeNodeOutput, TextHighlightRead } from '@precis/shared';
 
 import { useApi } from '../../../../hooks/useApi';
 
@@ -36,7 +36,7 @@ export default function SummaryViewScreen() {
   });
 
   const highlightsByNode = useMemo(() => {
-    const map = new Map<string, HighlightRead[]>();
+    const map = new Map<string, TextHighlightRead[]>();
     for (const h of highlights) {
       if (h.start_offset == null || h.end_offset == null) continue;
       const list = map.get(h.node_id);
@@ -84,7 +84,7 @@ export default function SummaryViewScreen() {
 // Returns true if this subtree contains any highlights.
 function subtreeHasHighlights(
   node: DocumentContentTreeNodeOutput,
-  highlightsByNode: Map<string, HighlightRead[]>,
+  highlightsByNode: Map<string, TextHighlightRead[]>,
 ): boolean {
   if (highlightsByNode.has(node.id)) return true;
   if (node.children) {
@@ -100,7 +100,7 @@ function RenderNode({
   highlightsByNode,
 }: {
   node: DocumentContentTreeNodeOutput;
-  highlightsByNode: Map<string, HighlightRead[]>;
+  highlightsByNode: Map<string, TextHighlightRead[]>;
 }) {
   if (!subtreeHasHighlights(node, highlightsByNode)) return null;
 
@@ -140,7 +140,7 @@ function RenderNode({
 // Renders each highlighted span as its own Text. Spans from the same node
 // are shown on separate lines so the reader sees distinct picks rather than
 // a single mashed-together fragment.
-function HighlightedSpans({ text, highlights }: { text: string; highlights: HighlightRead[] }) {
+function HighlightedSpans({ text, highlights }: { text: string; highlights: TextHighlightRead[] }) {
   return (
     <View style={styles.spans}>
       {highlights.map((h) => (

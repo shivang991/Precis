@@ -14,7 +14,7 @@ import {
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { scheduleOnRN } from 'react-native-worklets';
 
-import type { HighlightRead } from '@precis/shared';
+import type { TextHighlightRead } from '@precis/shared';
 
 import { useSelection, useSelectionSlice, wordBoundsAt } from './SelectionProvider';
 
@@ -27,7 +27,7 @@ const TEXT_COLOR = '#1a1a1a';
 interface HighlightableTextProps {
   nodeId: string;
   text: string;
-  highlights: HighlightRead[];
+  highlights: TextHighlightRead[];
   fontSize?: number;
   lineHeight?: number;
   bold?: boolean;

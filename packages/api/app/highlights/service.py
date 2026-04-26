@@ -1,18 +1,22 @@
 import uuid
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.documents import DocumentService
-from app.documents.models import DocumentStatus
+from app.documents.models import DocumentNode, DocumentStatus, NodeType
 from app.users import User
 
 from .errors import (
     DocumentNotReadyError,
     HighlightNotFoundError,
+    HighlightTypeMismatchError,
+    NodeNotFoundError,
 )
-from .models import Highlight
-from .schemas import HighlightCreate
+from .handlers import HighlightHandler, TextHighlightHandler
+from .models import TextHighlight
+from .schemas import HighlightCreate, TextHighlightCreate
 
 
 class HighlightService:
@@ -23,6 +27,9 @@ class HighlightService:
     ) -> None:
         self.db = db
         self.document_service = document_service
+        self.handlers: dict[NodeType, HighlightHandler[Any, Any]] = {
+            NodeType.text: TextHighlightHandler(),
+        }
 
     async def _get_owned_doc(self, document_id: uuid.UUID, user: User) -> None:
         doc = await self.document_service.get_document(document_id, user)
@@ -30,111 +37,83 @@ class HighlightService:
             raise DocumentNotReadyError()
 
     async def list_highlights(
-        self, document_id: uuid.UUID, user: User
-    ) -> list[Highlight]:
-        await self._get_owned_doc(document_id, user)
-        result = await self.db.execute(
-            select(Highlight)
-            .where(Highlight.document_id == document_id)
-            .order_by(Highlight.created_at)
-        )
-        return list(result.scalars().all())
-
-    def _flatten_highlights(
         self,
-        highlights: list[HighlightCreate],
-    ) -> list[HighlightCreate]:
-        if not highlights:
-            return []
-
-        groups: dict[tuple[str, str | None], list[HighlightCreate]] = {}
-        result: list[HighlightCreate] = []
-
-        for h in highlights:
-            if h.start_offset is not None and h.end_offset is not None:
-                groups.setdefault((h.node_id, h.note), []).append(h)
-            else:
-                result.append(h)
-
-        for (node_id, note), group in groups.items():
-            sorted_group = sorted(group, key=lambda h: h.start_offset)
-            first = sorted_group[0]
-            assert first.start_offset is not None and first.end_offset is not None
-            merged_start = first.start_offset
-            merged_end = first.end_offset
-            for h in sorted_group[1:]:
-                assert h.start_offset is not None and h.end_offset is not None
-                if h.start_offset <= merged_end:
-                    merged_end = max(merged_end, h.end_offset)
-                else:
-                    result.append(
-                        HighlightCreate(
-                            node_id=node_id,
-                            start_offset=merged_start,
-                            end_offset=merged_end,
-                            note=note,
-                        )
-                    )
-                    merged_start = h.start_offset
-                    merged_end = h.end_offset
-            result.append(
-                HighlightCreate(
-                    node_id=node_id,
-                    start_offset=merged_start,
-                    end_offset=merged_end,
-                    note=note,
-                )
+        document_id: uuid.UUID,
+        user: User,
+    ) -> list[Any]:
+        await self._get_owned_doc(document_id, user)
+        rows: list[Any] = []
+        for handler in self.handlers.values():
+            result = await self.db.execute(
+                select(handler.model).where(handler.model.document_id == document_id)
             )
-
-        return result
+            rows.extend(result.scalars().all())
+        rows.sort(key=lambda r: r.created_at)
+        return rows
 
     async def add_highlights(
         self,
         document_id: uuid.UUID,
         bodies: list[HighlightCreate],
         user: User,
-    ) -> list[Highlight]:
+    ) -> list[Any]:
         await self._get_owned_doc(document_id, user)
 
         node_ids = {b.node_id for b in bodies}
-        result = await self.db.execute(
-            select(Highlight).where(
-                Highlight.document_id == document_id,
-                Highlight.node_id.in_(node_ids),
+        if not node_ids:
+            return []
+
+        nodes_result = await self.db.execute(
+            select(DocumentNode).where(
+                DocumentNode.id.in_(node_ids),
+                DocumentNode.document_id == document_id,
             )
         )
-        existing = list(result.scalars().all())
+        nodes_by_id = {n.id: n for n in nodes_result.scalars().all()}
 
-        existing_as_create = [
-            HighlightCreate(
-                node_id=h.node_id,
-                start_offset=h.start_offset,
-                end_offset=h.end_offset,
-                note=h.note,
+        # Validate types and group payloads by handler.
+        by_node_type: dict[NodeType, list[Any]] = {}
+        for body in bodies:
+            node = nodes_by_id.get(body.node_id)
+            if node is None:
+                raise NodeNotFoundError()
+            handler = self.handlers.get(node.type)
+            if handler is None or body.type != handler.node_type.value:
+                raise HighlightTypeMismatchError()
+            by_node_type.setdefault(node.type, []).append(body)
+
+        created: list[Any] = []
+        for node_type, group in by_node_type.items():
+            handler = self.handlers[node_type]
+            touched_node_ids = {b.node_id for b in group}
+            existing_result = await self.db.execute(
+                select(handler.model).where(
+                    handler.model.document_id == document_id,
+                    handler.model.node_id.in_(touched_node_ids),
+                )
             )
-            for h in existing
-        ]
+            existing_rows = list(existing_result.scalars().all())
+            existing = [handler.to_existing(r) for r in existing_rows]
+            existing_by_id = {
+                e.id: r for e, r in zip(existing, existing_rows, strict=True)
+            }
 
-        flattened = self._flatten_highlights(existing_as_create + bodies)
+            outcome = handler.reconcile(existing, group)
 
-        for h in existing:
-            await self.db.delete(h)
+            for hid in outcome.to_delete:
+                row = existing_by_id.get(hid)
+                if row is not None:
+                    await self.db.delete(row)
+            await self.db.flush()
+
+            for payload in outcome.to_create:
+                row = handler.model(document_id=document_id, **payload)
+                self.db.add(row)
+                created.append(row)
+
         await self.db.flush()
-
-        created: list[Highlight] = []
-        for body in flattened:
-            highlight = Highlight(
-                document_id=document_id,
-                node_id=body.node_id,
-                start_offset=body.start_offset,
-                end_offset=body.end_offset,
-                note=body.note,
-            )
-            self.db.add(highlight)
-            created.append(highlight)
-        await self.db.flush()
-        for h in created:
-            await self.db.refresh(h)
+        for row in created:
+            await self.db.refresh(row)
         return created
 
     async def remove_highlights(
@@ -144,14 +123,31 @@ class HighlightService:
         user: User,
     ) -> None:
         await self._get_owned_doc(document_id, user)
-        result = await self.db.execute(
-            select(Highlight).where(
-                Highlight.id.in_(highlight_ids),
-                Highlight.document_id == document_id,
+        if not highlight_ids:
+            return
+
+        found_ids: set[uuid.UUID] = set()
+        rows_to_delete: list[Any] = []
+        for handler in self.handlers.values():
+            result = await self.db.execute(
+                select(handler.model).where(
+                    handler.model.id.in_(highlight_ids),
+                    handler.model.document_id == document_id,
+                )
             )
-        )
-        found = list(result.scalars().all())
-        if len(found) != len(highlight_ids):
+            for row in result.scalars().all():
+                found_ids.add(row.id)
+                rows_to_delete.append(row)
+
+        if found_ids != set(highlight_ids):
             raise HighlightNotFoundError()
-        for highlight in found:
-            await self.db.delete(highlight)
+
+        for row in rows_to_delete:
+            await self.db.delete(row)
+
+
+__all__ = [
+    "HighlightService",
+    "TextHighlight",
+    "TextHighlightCreate",
+]

@@ -9,3 +9,13 @@ class DocumentNotReadyError(DomainError):
 class HighlightNotFoundError(DomainError):
     status_code = 404
     detail = "Highlight not found."
+
+
+class HighlightTypeMismatchError(DomainError):
+    status_code = 400
+    detail = "Highlight type does not match target node content type."
+
+
+class NodeNotFoundError(DomainError):
+    status_code = 400
+    detail = "Target node not found in document."

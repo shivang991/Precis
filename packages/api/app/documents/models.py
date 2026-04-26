@@ -67,7 +67,7 @@ class Document(Base):
     )
 
     owner: Mapped["User"] = relationship(back_populates="documents")  # noqa: F821
-    highlights: Mapped[list["Highlight"]] = relationship(  # noqa: F821
+    text_highlights: Mapped[list["TextHighlight"]] = relationship(  # noqa: F821
         back_populates="document", cascade="all, delete-orphan"
     )
     nodes: Mapped[list["DocumentNode"]] = relationship(
