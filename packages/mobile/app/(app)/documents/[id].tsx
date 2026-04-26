@@ -37,6 +37,21 @@ export default function DocumentViewerScreen() {
     enabled: !!id,
   });
 
+  const processTriggeredRef = useRef(false);
+  useEffect(() => {
+    if (!document) return;
+    if (document.status !== "pending" && document.status !== "failed") return;
+    if (processTriggeredRef.current) return;
+    processTriggeredRef.current = true;
+    api
+      .processDocument(id)
+      .then(() => qc.invalidateQueries({ queryKey: ["document", id] }))
+      .catch((e: any) => {
+        processTriggeredRef.current = false;
+        Alert.alert("Failed to start processing", e?.message ?? "Unknown error");
+      });
+  }, [document, api, id, qc]);
+
   const { data: highlights = [] } = useQuery({
     queryKey: ["highlights", id],
     queryFn: () => api.listHighlights(id),
