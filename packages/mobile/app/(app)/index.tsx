@@ -30,6 +30,36 @@ export default function FilesListScreen() {
     queryFn: () => api.listDocuments(),
   });
 
+  const deleteMutation = useMutation({
+    mutationFn: (documentId: string) => api.deleteDocument(documentId),
+    onMutate: async (documentId: string) => {
+      await qc.cancelQueries({ queryKey: ["documents"] });
+      const previous = qc.getQueryData<DocumentRead[]>(["documents"]);
+      qc.setQueryData<DocumentRead[]>(["documents"], (old) =>
+        old ? old.filter((d) => d.id !== documentId) : old,
+      );
+      return { previous };
+    },
+    onError: (e: any, _id, ctx) => {
+      if (ctx?.previous) qc.setQueryData(["documents"], ctx.previous);
+      Alert.alert("Delete failed", e.message);
+    },
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: ["documents"] });
+    },
+  });
+
+  const confirmDelete = (doc: DocumentRead) => {
+    Alert.alert("Delete document", `Delete "${doc.title}"?`, [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Delete",
+        style: "destructive",
+        onPress: () => deleteMutation.mutate(doc.id),
+      },
+    ]);
+  };
+
   const uploadMutation = useMutation({
     mutationFn: async (source: DocumentSource) => {
       const result = await DocumentPicker.getDocumentAsync({
@@ -92,22 +122,37 @@ export default function FilesListScreen() {
 
   const isBusy = uploadMutation.isPending || processingId !== null;
 
-  const renderItem = ({ item }: { item: DocumentRead }) => (
-    <TouchableOpacity
-      style={styles.row}
-      onPress={() => router.push(`/(app)/documents/${item.id}`)}
-    >
-      <View style={styles.rowContent}>
+  const renderItem = ({ item }: { item: DocumentRead }) => {
+    const isDeleting =
+      deleteMutation.isPending && deleteMutation.variables === item.id;
+    return (
+      <View style={styles.row}>
         <Text style={styles.docTitle} numberOfLines={1}>
           {item.title}
         </Text>
         <Text style={styles.docMeta}>
           {item.source} · {item.status}
         </Text>
+        <View style={styles.actions}>
+          <TouchableOpacity
+            style={styles.openBtn}
+            onPress={() => router.push(`/(app)/documents/${item.id}`)}
+          >
+            <Text style={styles.openBtnText}>Open</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.deleteBtn, isDeleting && styles.deleteBtnDisabled]}
+            onPress={() => confirmDelete(item)}
+            disabled={isDeleting}
+          >
+            <Text style={styles.deleteBtnText}>
+              {isDeleting ? "Deleting…" : "Delete"}
+            </Text>
+          </TouchableOpacity>
+        </View>
       </View>
-      <Text style={styles.openLabel}>Open</Text>
-    </TouchableOpacity>
-  );
+    );
+  };
 
   return (
     <View style={styles.container}>
@@ -196,17 +241,39 @@ const styles = StyleSheet.create({
   processingText: { color: "#fff", fontSize: 13 },
   list: { padding: 16, gap: 2 },
   row: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
+    flexDirection: "column",
+    alignItems: "stretch",
     paddingVertical: 14,
+    gap: 8,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: "#e0e0e0",
   },
-  rowContent: { flex: 1, marginRight: 12 },
   docTitle: { fontSize: 15, fontWeight: "500" },
   docMeta: { fontSize: 12, color: "#888", marginTop: 2 },
-  openLabel: { fontSize: 14, color: "#1a73e8", fontWeight: "500" },
+  actions: {
+    flexDirection: "row",
+    gap: 8,
+    marginTop: 6,
+  },
+  openBtn: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: "#1a73e8",
+    borderRadius: 8,
+    paddingVertical: 10,
+    alignItems: "center",
+  },
+  openBtnText: { fontSize: 14, color: "#1a73e8", fontWeight: "500" },
+  deleteBtn: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: "#d93025",
+    borderRadius: 8,
+    paddingVertical: 10,
+    alignItems: "center",
+  },
+  deleteBtnDisabled: { opacity: 0.5 },
+  deleteBtnText: { fontSize: 14, color: "#d93025", fontWeight: "500" },
   empty: { textAlign: "center", color: "#999", marginTop: 48 },
   uploadBar: {
     flexDirection: "row",
