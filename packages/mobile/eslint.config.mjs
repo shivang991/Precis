@@ -7,9 +7,9 @@ import importPlugin from 'eslint-plugin-import';
 import prettier from 'eslint-plugin-prettier';
 import prettierConfig from 'eslint-config-prettier';
 import globals from 'globals';
-import { defineConfig } from 'eslint-define-config';
+import { defineConfig } from 'eslint/config';
 
-export default defineConfig(
+export default defineConfig([
   {
     ignores: [
       'node_modules/**',
@@ -94,4 +94,4 @@ export default defineConfig(
     },
   },
   prettierConfig,
-);
+]);
