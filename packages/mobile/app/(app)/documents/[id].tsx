@@ -279,7 +279,7 @@ export default function DocumentViewerScreen() {
     );
   }
 
-  const nodes = document.document_content_tree?.nodes ?? [];
+  const nodes = document.document_content_tree ?? [];
   const fabVisible = selection != null;
   const showAdd = coverage !== "full";
   const showRemove = coverage !== "none";

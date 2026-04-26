@@ -47,7 +47,7 @@ export default function SummaryViewScreen() {
     return map;
   }, [highlights]);
 
-  const nodes = document?.document_content_tree?.nodes ?? [];
+  const nodes = document?.document_content_tree ?? [];
   const hasAnyHighlights = highlights.length > 0;
 
   if (docLoading || hlLoading) {
