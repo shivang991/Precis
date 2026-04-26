@@ -1,16 +1,8 @@
 from datetime import datetime
-from enum import StrEnum
 
 from pydantic import BaseModel
 
-
-class NodeType(StrEnum):
-    heading = "heading"  # section heading (level 1–6)
-    paragraph = "paragraph"  # body text
-    list_item = "list_item"  # bullet / numbered list item
-    table = "table"  # table block (cells stored as nested rows/cols in `content`)
-    image = "image"  # image block (storage key in `src`)
-    code = "code"  # code block
+from app.documents.models import NodeType
 
 
 class DocumentContentTreeNode(BaseModel):
