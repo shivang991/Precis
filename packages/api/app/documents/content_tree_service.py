@@ -5,11 +5,24 @@ the document content tree live here.
 
 import uuid
 
-from sqlalchemy import select, text
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
-from .models import DocumentNode, NodeType
-from .schemas import DocumentContentTreeNode
+from .models import (
+    DocumentNode,
+    ImageContent,
+    NodeType,
+    TableContent,
+    TextContent,
+)
+from .schemas import (
+    DocumentContentTreeNode,
+    ImageContentPayload,
+    NodeContent,
+    TableContentPayload,
+    TextContentPayload,
+)
 
 
 class DocumentContentTreeService:
@@ -17,20 +30,12 @@ class DocumentContentTreeService:
 
     @staticmethod
     def make_node(
-        node_type: NodeType,
-        text: str | None = None,
-        level: int | None = None,
-        content: dict | None = None,
-        page: int | None = None,
+        content: NodeContent,
         children: list[DocumentContentTreeNode] | None = None,
     ) -> DocumentContentTreeNode:
         return DocumentContentTreeNode(
             id=str(uuid.uuid4()),
-            type=node_type,
-            level=level,
-            text=text,
             content=content,
-            page=page,
             children=children or [],
         )
 
@@ -46,7 +51,13 @@ class DocumentContentTreeService:
             (0, {"children": root})
         ]
         for node in flat_nodes:
-            level = node.level if node.type == NodeType.heading else 999
+            heading_level = (
+                node.content.level
+                if isinstance(node.content, TextContentPayload)
+                and node.content.level is not None
+                else None
+            )
+            level = heading_level if heading_level is not None else 999
             while len(stack) > 1 and stack[-1][0] >= level:
                 stack.pop()
             parent = stack[-1][1]
@@ -54,11 +65,25 @@ class DocumentContentTreeService:
                 parent["children"].append(node)
             else:
                 parent.children.append(node)
-            if node.type == NodeType.heading:
+            if heading_level is not None:
                 stack.append((level, node))
         return root
 
     # ── Persistence ──────────────────────────────────────────────────────────
+
+    @staticmethod
+    def _build_content_row(
+        node_id: uuid.UUID, content: NodeContent
+    ) -> TextContent | TableContent | ImageContent:
+        if isinstance(content, TextContentPayload):
+            return TextContent(node_id=node_id, text=content.text, level=content.level)
+        if isinstance(content, TableContentPayload):
+            return TableContent(
+                node_id=node_id, rows=content.rows, headers=content.headers
+            )
+        return ImageContent(
+            node_id=node_id, storage_key=content.storage_key, alt=content.alt
+        )
 
     @classmethod
     async def create_nodes(
@@ -68,7 +93,8 @@ class DocumentContentTreeService:
         nested_nodes: list[DocumentContentTreeNode],
     ) -> None:
         """Flatten a nested tree (DFS) and bulk-insert as document_nodes rows."""
-        rows: list[DocumentNode] = []
+        node_rows: list[DocumentNode] = []
+        content_rows: list[TextContent | TableContent | ImageContent] = []
         seq = 0
 
         def walk(
@@ -77,24 +103,23 @@ class DocumentContentTreeService:
             nonlocal seq
             for n in nodes:
                 node_id = uuid.UUID(n.id)
-                rows.append(
+                node_rows.append(
                     DocumentNode(
                         id=node_id,
                         document_id=document_id,
                         parent_id=parent_id,
                         seq=seq,
-                        type=n.type,
-                        level=n.level,
-                        text=n.text,
-                        content=n.content,
-                        page=n.page,
+                        type=NodeType(n.content.type),
                     )
                 )
+                content_rows.append(cls._build_content_row(node_id, n.content))
                 seq += 1
                 walk(n.children, node_id)
 
         walk(nested_nodes, None)
-        db.add_all(rows)
+        db.add_all(node_rows)
+        await db.flush()
+        db.add_all(content_rows)
         await db.flush()
 
     @classmethod
@@ -106,6 +131,11 @@ class DocumentContentTreeService:
             select(DocumentNode)
             .where(DocumentNode.document_id == document_id)
             .order_by(DocumentNode.seq)
+            .options(
+                selectinload(DocumentNode.text_content),
+                selectinload(DocumentNode.table_content),
+                selectinload(DocumentNode.image_content),
+            )
         )
         rows = list(result.scalars().all())
 
@@ -114,11 +144,7 @@ class DocumentContentTreeService:
         for row in rows:
             node = DocumentContentTreeNode(
                 id=str(row.id),
-                type=row.type,
-                level=row.level,
-                text=row.text,
-                content=row.content,
-                page=row.page,
+                content=cls._content_to_payload(row),
                 children=[],
             )
             node_map[row.id] = node
@@ -130,6 +156,20 @@ class DocumentContentTreeService:
                     parent.children.append(node)
         return roots
 
+    @staticmethod
+    def _content_to_payload(row: DocumentNode) -> NodeContent:
+        if row.type == NodeType.text:
+            c = row.text_content
+            assert c is not None
+            return TextContentPayload(text=c.text, level=c.level)
+        if row.type == NodeType.table:
+            c = row.table_content
+            assert c is not None
+            return TableContentPayload(rows=c.rows, headers=c.headers)
+        c = row.image_content
+        assert c is not None
+        return ImageContentPayload(storage_key=c.storage_key, alt=c.alt)
+
     # ── Mutation ─────────────────────────────────────────────────────────────
 
     @classmethod
@@ -139,20 +179,36 @@ class DocumentContentTreeService:
         document_id: uuid.UUID,
         updates: dict[str, dict],
     ) -> None:
-        """Apply partial updates to nodes matched by ID. Tree shape is immutable."""
+        """Apply partial content updates to nodes matched by ID. Tree shape and
+        node type are immutable — only fields within the matching content row
+        are patched."""
         if not updates:
             return
         node_ids = [uuid.UUID(nid) for nid in updates]
         result = await db.execute(
-            select(DocumentNode).where(
+            select(DocumentNode)
+            .where(
                 DocumentNode.document_id == document_id,
                 DocumentNode.id.in_(node_ids),
             )
+            .options(
+                selectinload(DocumentNode.text_content),
+                selectinload(DocumentNode.table_content),
+                selectinload(DocumentNode.image_content),
+            )
         )
-        mutable_fields = ("type", "level", "text", "content", "page")
+        allowed_fields: dict[NodeType, tuple[str, ...]] = {
+            NodeType.text: ("text", "level"),
+            NodeType.table: ("rows", "headers"),
+            NodeType.image: ("storage_key", "alt"),
+        }
         for row in result.scalars().all():
             patch = updates.get(str(row.id), {})
-            for field in mutable_fields:
-                if field in patch:
-                    setattr(row, field, patch[field])
+            content_patch = patch.get("content") or {}
+            target = row.content
+            if target is None:
+                continue
+            for field in allowed_fields[row.type]:
+                if field in content_patch:
+                    setattr(target, field, content_patch[field])
         await db.flush()

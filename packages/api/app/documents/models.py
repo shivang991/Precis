@@ -1,6 +1,7 @@
 import uuid
 from datetime import datetime
 from enum import StrEnum
+from typing import ClassVar, Literal
 
 from sqlalchemy import (
     DateTime,
@@ -32,12 +33,9 @@ class DocumentSource(StrEnum):
 
 
 class NodeType(StrEnum):
-    heading = "heading"
-    paragraph = "paragraph"
-    list_item = "list_item"
+    text = "text"
     table = "table"
     image = "image"
-    code = "code"
 
 
 class Document(Base):
@@ -51,7 +49,6 @@ class Document(Base):
     title: Mapped[str] = mapped_column(String(512))
     original_filename: Mapped[str] = mapped_column(String(512))
 
-    # Storage key for the raw uploaded PDF in object storage
     storage_key: Mapped[str] = mapped_column(String(1024))
 
     source: Mapped[DocumentSource] = mapped_column(
@@ -97,11 +94,81 @@ class DocumentNode(Base):
         index=True,
     )
     seq: Mapped[int] = mapped_column(Integer)
-
     type: Mapped[NodeType] = mapped_column(Enum(NodeType))
-    level: Mapped[int | None] = mapped_column(SmallInteger, nullable=True)
-    text: Mapped[str | None] = mapped_column(Text, nullable=True)
-    content: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
-    page: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     document: Mapped["Document"] = relationship(back_populates="nodes")
+
+    text_content: Mapped["TextContent | None"] = relationship(
+        back_populates="node",
+        uselist=False,
+        cascade="all, delete-orphan",
+        single_parent=True,
+    )
+    table_content: Mapped["TableContent | None"] = relationship(
+        back_populates="node",
+        uselist=False,
+        cascade="all, delete-orphan",
+        single_parent=True,
+    )
+    image_content: Mapped["ImageContent | None"] = relationship(
+        back_populates="node",
+        uselist=False,
+        cascade="all, delete-orphan",
+        single_parent=True,
+    )
+
+    @property
+    def content(self) -> "TextContent | TableContent | ImageContent | None":
+        return {
+            NodeType.text: self.text_content,
+            NodeType.table: self.table_content,
+            NodeType.image: self.image_content,
+        }[self.type]
+
+
+class TextContent(Base):
+    __tablename__ = "text_contents"
+
+    type: ClassVar[Literal[NodeType.text]] = NodeType.text
+
+    node_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("document_nodes.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    text: Mapped[str] = mapped_column(Text)
+    level: Mapped[int | None] = mapped_column(SmallInteger, nullable=True)
+
+    node: Mapped["DocumentNode"] = relationship(back_populates="text_content")
+
+
+class TableContent(Base):
+    __tablename__ = "table_contents"
+
+    type: ClassVar[Literal[NodeType.table]] = NodeType.table
+
+    node_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("document_nodes.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    rows: Mapped[list] = mapped_column(JSONB)
+    headers: Mapped[list | None] = mapped_column(JSONB, nullable=True)
+
+    node: Mapped["DocumentNode"] = relationship(back_populates="table_content")
+
+
+class ImageContent(Base):
+    __tablename__ = "image_contents"
+
+    type: ClassVar[Literal[NodeType.image]] = NodeType.image
+
+    node_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("document_nodes.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    storage_key: Mapped[str] = mapped_column(String(1024))
+    alt: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    node: Mapped["DocumentNode"] = relationship(back_populates="image_content")

@@ -1,9 +1,43 @@
 import uuid
 from datetime import datetime
+from typing import Annotated, Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
-from .models import DocumentSource, DocumentStatus, NodeType
+from .models import DocumentSource, DocumentStatus
+
+# ── Node content payloads (discriminated by `type`) ───────────────────────────
+
+
+class TextContentPayload(BaseModel):
+    type: Literal["text"] = "text"
+    text: str
+    level: int | None = None
+
+    model_config = {"from_attributes": True}
+
+
+class TableContentPayload(BaseModel):
+    type: Literal["table"] = "table"
+    rows: list
+    headers: list | None = None
+
+    model_config = {"from_attributes": True}
+
+
+class ImageContentPayload(BaseModel):
+    type: Literal["image"] = "image"
+    storage_key: str
+    alt: str | None = None
+
+    model_config = {"from_attributes": True}
+
+
+NodeContent = Annotated[
+    TextContentPayload | TableContentPayload | ImageContentPayload,
+    Field(discriminator="type"),
+]
+
 
 # ── Document content tree schemas ─────────────────────────────────────────────
 
@@ -12,11 +46,7 @@ class DocumentContentTreeNode(BaseModel):
     """A single node in the document content tree."""
 
     id: str
-    type: NodeType
-    level: int | None = None
-    text: str | None = None
-    content: dict | None = None
-    page: int | None = None
+    content: NodeContent
     children: list["DocumentContentTreeNode"] = []
 
     model_config = {"from_attributes": True}

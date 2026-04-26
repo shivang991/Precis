@@ -8,13 +8,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.shared import StorageService, get_logger, get_settings
 from app.users import User
 
+from .content_tree_service import DocumentContentTreeService
 from .errors import (
     DocumentNotFoundError,
     DocumentNotProcessedError,
     FileTooLargeError,
     InvalidFileTypeError,
 )
-from .content_tree_service import DocumentContentTreeService
 from .models import Document, DocumentSource, DocumentStatus
 from .parser_service import ParserService
 from .schemas import (
@@ -191,9 +191,7 @@ class DocumentService:
         if doc.status != DocumentStatus.READY:
             raise DocumentNotProcessedError()
 
-        updates = {
-            n.id: n.model_dump(exclude={"id", "children"}) for n in body.nodes
-        }
+        updates = {n.id: n.model_dump(exclude={"id", "children"}) for n in body.nodes}
         await DocumentContentTreeService.apply_updates(self.db, doc.id, updates)
         await self.db.flush()
         return doc

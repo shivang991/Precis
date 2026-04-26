@@ -8,8 +8,11 @@ from pdf2image import convert_from_bytes
 from app.shared import get_settings
 
 from .content_tree_service import DocumentContentTreeService
-from .models import NodeType
-from .schemas import DocumentContentTreeNode
+from .schemas import (
+    DocumentContentTreeNode,
+    TableContentPayload,
+    TextContentPayload,
+)
 
 settings = get_settings()
 
@@ -20,8 +23,17 @@ class ParsedPDF:
     page_count: int
 
 
-class ParserService:
+def _make_text_node(text: str, level: int | None) -> DocumentContentTreeNode:
+    return DocumentContentTreeService.make_node(
+        TextContentPayload(text=text, level=level)
+    )
 
+
+def _make_table_node(rows: list) -> DocumentContentTreeNode:
+    return DocumentContentTreeService.make_node(TableContentPayload(rows=rows))
+
+
+class ParserService:
     # ── Configuration ─────────────────────────────────────────────────────────────
 
     digital_pdf_heading_size_map: list[tuple[float, int]] = [
@@ -50,7 +62,7 @@ class ParserService:
         with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
             page_count = len(pdf.pages)
 
-            for page_num, page in enumerate(pdf.pages, start=1):
+            for page in pdf.pages:
                 words = page.extract_words(extra_attrs=["size", "fontname"])
                 if not words:
                     continue
@@ -73,8 +85,6 @@ class ParserService:
                     line_bottom = max(w["bottom"] for w in line_words)
                     line_height = line_bottom - line_top
 
-                    # Gap between bottom of previous line and top of this line
-                    # exceeding the line's own height ≈ a blank line in between.
                     has_double_newline = (
                         prev_line_bottom is not None
                         and line_height > 0
@@ -89,50 +99,28 @@ class ParserService:
                         heading_level = self._font_size_to_heading_level(
                             word.get("size", 10)
                         )
-                        node_type = (
-                            NodeType.heading if heading_level else NodeType.paragraph
-                        )
 
                         can_merge = False
                         if nodes and not has_double_newline:
                             last = nodes[-1]
-                            if last.type == node_type and last.page == page_num:
-                                if node_type == NodeType.paragraph:
-                                    can_merge = True
-                                elif last.level == heading_level:
+                            if isinstance(last.content, TextContentPayload):
+                                if last.content.level == heading_level:
                                     can_merge = True
 
                         if can_merge:
-                            nodes[-1].text += " " + text
-                        elif heading_level:
-                            nodes.append(
-                                DocumentContentTreeService.make_node(
-                                    NodeType.heading,
-                                    text=text,
-                                    level=heading_level,
-                                    page=page_num,
-                                )
-                            )
+                            last_content = nodes[-1].content
+                            assert isinstance(last_content, TextContentPayload)
+                            last_content.text += " " + text
                         else:
-                            nodes.append(
-                                DocumentContentTreeService.make_node(
-                                    NodeType.paragraph, text=text, page=page_num
-                                )
-                            )
+                            nodes.append(_make_text_node(text, heading_level))
 
-                        # Reset so remaining words on this line merge normally
-                        # into the newly created node.
                         has_double_newline = False
 
                     prev_line_bottom = line_bottom
 
                 for table in page.extract_tables():
                     if table:
-                        nodes.append(
-                            DocumentContentTreeService.make_node(
-                                NodeType.table, page=page_num, content={"rows": table}
-                            )
-                        )
+                        nodes.append(_make_table_node(table))
 
         return ParsedPDF(nodes=nodes, page_count=page_count)
 
@@ -149,7 +137,7 @@ class ParserService:
         page_count = len(images)
         nodes: list[DocumentContentTreeNode] = []
 
-        for page_num, image in enumerate(images, start=1):
+        for image in images:
             data = pytesseract.image_to_data(
                 image,
                 lang=self.ocr_lang,
@@ -159,7 +147,6 @@ class ParserService:
             # Tesseract groups words into blocks → paragraphs → lines.
             # A change in block_num or par_num is the OCR equivalent of a
             # double newline, so we use it to force a node break.
-            # Words with the same classification merge into one node otherwise.
             n = len(data["text"])
             prev_block: int | None = None
             prev_par: int | None = None
@@ -179,21 +166,20 @@ class ParserService:
                 )
 
                 heading_level = self._ocr_height_to_heading_level(height)
-                node_type = NodeType.heading if heading_level else NodeType.paragraph
 
                 can_merge = False
                 if nodes and not has_paragraph_break:
                     last = nodes[-1]
-                    if last.type == node_type and last.page == page_num:
-                        if node_type == NodeType.paragraph:
-                            can_merge = True
-                        elif last.level == heading_level:
+                    if isinstance(last.content, TextContentPayload):
+                        if last.content.level == heading_level:
                             can_merge = True
 
                 if can_merge:
-                    nodes[-1].text += " " + text
+                    last_content = nodes[-1].content
+                    assert isinstance(last_content, TextContentPayload)
+                    last_content.text += " " + text
                 else:
-                    nodes.append(self._classify_ocr_word(text, height, page_num))
+                    nodes.append(_make_text_node(text, heading_level))
 
                 prev_block = block_num
                 prev_par = par_num
@@ -205,18 +191,3 @@ class ParserService:
             if height >= threshold:
                 return level
         return None
-
-    def _classify_ocr_word(
-        self,
-        text: str,
-        height: int,
-        page: int,
-    ) -> DocumentContentTreeNode:
-        level = self._ocr_height_to_heading_level(height)
-        if level:
-            return DocumentContentTreeService.make_node(
-                NodeType.heading, text=text, level=level, page=page
-            )
-        return DocumentContentTreeService.make_node(
-            NodeType.paragraph, text=text, page=page
-        )

@@ -82,9 +82,13 @@ class UserService:
 
         _, mobile_redirect = self._parse_oauth_state(state)
         if mobile_redirect:
-            target = f"{mobile_redirect}?{urlencode({
-                'access_token': result.access_token,
-            })}"
+            target = f"{mobile_redirect}?{
+                urlencode(
+                    {
+                        'access_token': result.access_token,
+                    }
+                )
+            }"
             return RedirectResponse(url=target)
 
         return result
