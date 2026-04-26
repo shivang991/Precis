@@ -2,13 +2,13 @@ import React from 'react';
 
 import { View, Text, StyleSheet, ViewStyle } from 'react-native';
 
-import type { DocumentContentTreeNodeOutput, HighlightRead } from '@precis/shared';
+import type { DocumentContentTreeNodeOutput, TextHighlightRead } from '@precis/shared';
 
 import { HighlightableText } from './HighlightableText';
 
 interface NodeRendererProps {
   nodes: DocumentContentTreeNodeOutput[];
-  highlights: HighlightRead[];
+  highlights: TextHighlightRead[];
 }
 
 export function NodeRenderer({ nodes, highlights }: NodeRendererProps) {
@@ -26,7 +26,7 @@ function RenderNode({
   highlights,
 }: {
   node: DocumentContentTreeNodeOutput;
-  highlights: HighlightRead[];
+  highlights: TextHighlightRead[];
 }) {
   const nodeHighlights = highlights.filter((h) => h.node_id === node.id);
   const content = node.content;

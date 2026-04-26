@@ -14,7 +14,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
-import type { HighlightCreate, HighlightRead } from '@precis/shared';
+import type { TextHighlightCreate, TextHighlightRead } from '@precis/shared';
 
 import { NodeRenderer } from '../../../components/document/NodeRenderer';
 import {
@@ -74,7 +74,7 @@ export default function DocumentViewerScreen() {
 
   // Per-slice overlap with existing highlights.
   const overlappingByNode = useMemo(() => {
-    if (!selection) return [] as Array<{ slice: NodeSlice; overs: HighlightRead[] }>;
+    if (!selection) return [] as Array<{ slice: NodeSlice; overs: TextHighlightRead[] }>;
     return selection.slices.map((slice) => ({
       slice,
       overs: highlights.filter(
@@ -123,7 +123,7 @@ export default function DocumentViewerScreen() {
     return 'partial';
   }, [selection, overlappingByNode]);
 
-  const pendingAddsRef = useRef<Array<{ create: HighlightCreate; tempId: string }>>([]);
+  const pendingAddsRef = useRef<Array<{ create: TextHighlightCreate; tempId: string }>>([]);
   const pendingRemovalsRef = useRef<string[]>([]);
   const flushTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -179,7 +179,7 @@ export default function DocumentViewerScreen() {
     (r: { nodeId: string; start: number; end: number }) => {
       const tempId = `${TEMP_ID_PREFIX}${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
       const now = new Date().toISOString();
-      const optimistic: HighlightRead = {
+      const optimistic: TextHighlightRead = {
         id: tempId,
         document_id: id,
         node_id: r.nodeId,
@@ -192,7 +192,7 @@ export default function DocumentViewerScreen() {
         create: { node_id: r.nodeId, start_offset: r.start, end_offset: r.end },
         tempId,
       });
-      qc.setQueryData<HighlightRead[]>(['highlights', id], (prev = []) => [...prev, optimistic]);
+      qc.setQueryData<TextHighlightRead[]>(['highlights', id], (prev = []) => [...prev, optimistic]);
       scheduleFlush();
     },
     [id, qc, scheduleFlush],
@@ -210,7 +210,7 @@ export default function DocumentViewerScreen() {
         }
       }
       const idSet = new Set(ids);
-      qc.setQueryData<HighlightRead[]>(['highlights', id], (prev = []) =>
+      qc.setQueryData<TextHighlightRead[]>(['highlights', id], (prev = []) =>
         prev.filter((h) => !idSet.has(h.id)),
       );
       scheduleFlush();
