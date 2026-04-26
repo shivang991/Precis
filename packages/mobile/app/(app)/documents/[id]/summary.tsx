@@ -105,53 +105,32 @@ function RenderNode({
   if (!subtreeHasHighlights(node, highlightsByNode)) return null;
 
   const nodeHighlights = highlightsByNode.get(node.id);
+  const content = node.content;
 
-  switch (node.type) {
-    case 'heading': {
-      const level = node.level ?? 1;
-      const typo = headingTypography[level] ?? headingTypography[1];
-      return (
-        <View style={[styles.headingContainer, headingSpacing[level] ?? headingSpacing[1]]}>
-          <Text style={[{ fontSize: typo.fontSize, lineHeight: typo.lineHeight }, styles.heading]}>
-            {node.text ?? ''}
-          </Text>
-          {node.children?.map((c) => (
-            <RenderNode key={c.id} node={c} highlightsByNode={highlightsByNode} />
-          ))}
-        </View>
-      );
-    }
-
-    case 'paragraph':
+  switch (content.type) {
+    case 'text': {
+      if (content.level != null) {
+        const level = content.level;
+        const typo = headingTypography[level] ?? headingTypography[1];
+        return (
+          <View style={[styles.headingContainer, headingSpacing[level] ?? headingSpacing[1]]}>
+            <Text
+              style={[{ fontSize: typo.fontSize, lineHeight: typo.lineHeight }, styles.heading]}
+            >
+              {content.text}
+            </Text>
+            {node.children?.map((c) => (
+              <RenderNode key={c.id} node={c} highlightsByNode={highlightsByNode} />
+            ))}
+          </View>
+        );
+      }
       return nodeHighlights ? (
         <View style={styles.paragraphContainer}>
-          <HighlightedSpans text={node.text ?? ''} highlights={nodeHighlights} />
+          <HighlightedSpans text={content.text} highlights={nodeHighlights} />
         </View>
       ) : null;
-
-    case 'list_item':
-      return nodeHighlights ? (
-        <View
-          style={[
-            styles.listItem,
-            { paddingLeft: ((node.content?.depth as number) ?? 0) * 16 + 8 },
-          ]}
-        >
-          <Text style={styles.bullet}>•</Text>
-          <View style={styles.listItemText}>
-            <HighlightedSpans text={node.text ?? ''} highlights={nodeHighlights} />
-          </View>
-        </View>
-      ) : null;
-
-    case 'code':
-      return nodeHighlights ? (
-        <View style={styles.codeBlock}>
-          <Text style={styles.codeText}>
-            <HighlightedSpans text={node.text ?? ''} highlights={nodeHighlights} monospace />
-          </Text>
-        </View>
-      ) : null;
+    }
 
     default:
       return null;
@@ -161,19 +140,11 @@ function RenderNode({
 // Renders each highlighted span as its own Text. Spans from the same node
 // are shown on separate lines so the reader sees distinct picks rather than
 // a single mashed-together fragment.
-function HighlightedSpans({
-  text,
-  highlights,
-  monospace,
-}: {
-  text: string;
-  highlights: HighlightRead[];
-  monospace?: boolean;
-}) {
+function HighlightedSpans({ text, highlights }: { text: string; highlights: HighlightRead[] }) {
   return (
     <View style={styles.spans}>
       {highlights.map((h) => (
-        <Text key={h.id} style={[styles.highlighted, monospace && styles.codeText]}>
+        <Text key={h.id} style={styles.highlighted}>
           {text.substring(h.start_offset!, h.end_offset!)}
         </Text>
       ))}
@@ -222,11 +193,6 @@ const styles = StyleSheet.create({
   headingContainer: {},
   heading: { fontWeight: '700', color: '#1a1a1a' },
   paragraphContainer: { marginBottom: 12 },
-  listItem: { flexDirection: 'row', marginBottom: 6, alignItems: 'flex-start' },
-  listItemText: { flex: 1 },
-  bullet: { marginRight: 6, color: '#555', lineHeight: 22 },
-  codeBlock: { backgroundColor: '#f5f5f5', padding: 12, borderRadius: 6, marginVertical: 8 },
-  codeText: { fontFamily: 'monospace', fontSize: 13, color: '#333' },
   spans: { gap: 4 },
   highlighted: {
     fontSize: 15,

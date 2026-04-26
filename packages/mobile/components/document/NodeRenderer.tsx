@@ -29,76 +29,62 @@ function RenderNode({
   highlights: HighlightRead[];
 }) {
   const nodeHighlights = highlights.filter((h) => h.node_id === node.id);
+  const content = node.content;
 
-  switch (node.type) {
-    case 'heading': {
-      const level = node.level ?? 1;
-      const typo = headingTypography[level] ?? headingTypography[1];
+  switch (content.type) {
+    case 'text': {
+      if (content.level != null) {
+        const level = content.level;
+        const typo = headingTypography[level] ?? headingTypography[1];
+        return (
+          <View style={[styles.headingContainer, headingSpacing[level] ?? headingSpacing[1]]}>
+            <HighlightableText
+              nodeId={node.id}
+              text={content.text}
+              highlights={nodeHighlights}
+              fontSize={typo.fontSize}
+              lineHeight={typo.lineHeight}
+              bold
+            />
+            {node.children && node.children.length > 0 && (
+              <NodeRenderer nodes={node.children} highlights={highlights} />
+            )}
+          </View>
+        );
+      }
       return (
-        <View style={[styles.headingContainer, headingSpacing[level] ?? headingSpacing[1]]}>
-          <HighlightableText
-            nodeId={node.id}
-            text={node.text ?? ''}
-            highlights={nodeHighlights}
-            fontSize={typo.fontSize}
-            lineHeight={typo.lineHeight}
-            bold
-          />
-          {node.children && node.children.length > 0 && (
-            <NodeRenderer nodes={node.children} highlights={highlights} />
-          )}
+        <View style={styles.paragraphContainer}>
+          <HighlightableText nodeId={node.id} text={content.text} highlights={nodeHighlights} />
         </View>
       );
     }
 
-    case 'paragraph':
-      return (
-        <View style={styles.paragraphContainer}>
-          <HighlightableText nodeId={node.id} text={node.text ?? ''} highlights={nodeHighlights} />
-        </View>
-      );
-
-    case 'list_item':
-      return (
-        <View
-          style={[
-            styles.listItem,
-            { paddingLeft: ((node.content?.depth as number) ?? 0) * 16 + 8 },
-          ]}
-        >
-          <Text style={styles.bullet}>•</Text>
-          <HighlightableText nodeId={node.id} text={node.text ?? ''} highlights={nodeHighlights} />
-        </View>
-      );
-
-    case 'table':
+    case 'table': {
+      const headers = (content.headers ?? []) as unknown[];
+      const rows = (content.rows ?? []) as unknown[][];
       return (
         <View style={styles.table}>
-          <View style={styles.tableRow}>
-            {((node.content?.headers as string[]) ?? []).map((h, i) => (
-              <Text key={i} style={styles.tableHeader}>
-                {h}
-              </Text>
-            ))}
-          </View>
-          {((node.content?.rows as string[][]) ?? []).map((row, ri) => (
+          {headers.length > 0 && (
+            <View style={styles.tableRow}>
+              {headers.map((h, i) => (
+                <Text key={i} style={styles.tableHeader}>
+                  {String(h ?? '')}
+                </Text>
+              ))}
+            </View>
+          )}
+          {rows.map((row, ri) => (
             <View key={ri} style={styles.tableRow}>
               {row.map((cell, ci) => (
                 <Text key={ci} style={styles.tableCell}>
-                  {cell}
+                  {String(cell ?? '')}
                 </Text>
               ))}
             </View>
           ))}
         </View>
       );
-
-    case 'code':
-      return (
-        <View style={styles.codeBlock}>
-          <Text style={styles.codeText}>{node.text}</Text>
-        </View>
-      );
+    }
 
     default:
       return null;
@@ -126,8 +112,6 @@ const headingSpacing: Record<number, ViewStyle> = {
 const styles = StyleSheet.create({
   headingContainer: {},
   paragraphContainer: { marginBottom: 12 },
-  listItem: { flexDirection: 'row', marginBottom: 6, alignItems: 'flex-start' },
-  bullet: { marginRight: 6, color: '#555', lineHeight: 22 },
   table: { marginVertical: 12, borderWidth: 1, borderColor: '#ddd', borderRadius: 4 },
   tableRow: {
     flexDirection: 'row',
@@ -136,6 +120,4 @@ const styles = StyleSheet.create({
   },
   tableHeader: { flex: 1, padding: 8, fontWeight: '600', fontSize: 13, backgroundColor: '#f5f5f5' },
   tableCell: { flex: 1, padding: 8, fontSize: 13 },
-  codeBlock: { backgroundColor: '#f5f5f5', padding: 12, borderRadius: 6, marginVertical: 8 },
-  codeText: { fontFamily: 'monospace', fontSize: 13, color: '#333' },
 });
