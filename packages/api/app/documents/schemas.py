@@ -3,9 +3,27 @@ from datetime import datetime
 
 from pydantic import BaseModel
 
-from app.document_content_tree import DocumentContentTree, DocumentContentTreeNode
+from .models import DocumentSource, DocumentStatus, NodeType
 
-from .models import DocumentSource, DocumentStatus
+# ── Document content tree schemas ─────────────────────────────────────────────
+
+
+class DocumentContentTreeNode(BaseModel):
+    """A single node in the document content tree."""
+
+    id: str
+    type: NodeType
+    level: int | None = None
+    text: str | None = None
+    content: dict | None = None
+    page: int | None = None
+    children: list["DocumentContentTreeNode"] = []
+
+    model_config = {"from_attributes": True}
+
+
+DocumentContentTreeNode.model_rebuild()
+
 
 # ── Document CRUD schemas ─────────────────────────────────────────────────────
 
@@ -28,7 +46,7 @@ class DocumentRead(DocumentBase):
 
 
 class DocumentReadWithContent(DocumentRead):
-    document_content_tree: DocumentContentTree | None = None
+    document_content_tree: list[DocumentContentTreeNode] | None = None
 
 
 class DocumentUpdateSettings(BaseModel):

@@ -5,12 +5,11 @@ import pdfplumber
 import pytesseract
 from pdf2image import convert_from_bytes
 
-from app.document_content_tree import (
-    DocumentContentTreeNode,
-    DocumentContentTreeService,
-    NodeType,
-)
 from app.shared import get_settings
+
+from .content_tree_service import DocumentContentTreeService
+from .models import NodeType
+from .schemas import DocumentContentTreeNode
 
 settings = get_settings()
 

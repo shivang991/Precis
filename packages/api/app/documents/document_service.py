@@ -5,7 +5,6 @@ from collections.abc import AsyncIterator
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.document_content_tree import DocumentContentTreeService
 from app.shared import StorageService, get_logger, get_settings
 from app.users import User
 
@@ -15,9 +14,15 @@ from .errors import (
     FileTooLargeError,
     InvalidFileTypeError,
 )
+from .content_tree_service import DocumentContentTreeService
 from .models import Document, DocumentSource, DocumentStatus
 from .parser_service import ParserService
-from .schemas import DocumentUpdateContent, DocumentUpdateSettings
+from .schemas import (
+    DocumentRead,
+    DocumentReadWithContent,
+    DocumentUpdateContent,
+    DocumentUpdateSettings,
+)
 
 settings = get_settings()
 logger = get_logger()
@@ -90,11 +95,10 @@ class DocumentService:
                 else self.parser.parse_scanned_pdf(pdf_bytes)
             )
 
-            doc.document_content_tree = DocumentContentTreeService.build_document(
-                title=doc.title,
-                nodes=DocumentContentTreeService.nest(parsed_pdf.nodes),
-                source=doc.source.value,
-                page_count=parsed_pdf.page_count,
+            await DocumentContentTreeService.create_nodes(
+                self.db,
+                doc.id,
+                DocumentContentTreeService.nest(parsed_pdf.nodes),
             )
             doc.status = DocumentStatus.READY
             await self.db.commit()
@@ -152,6 +156,19 @@ class DocumentService:
     async def get_document(self, document_id: uuid.UUID, user: User) -> Document:
         return await self._get_owned_doc(document_id, user)
 
+    async def get_document_with_content(
+        self, document_id: uuid.UUID, user: User
+    ) -> DocumentReadWithContent:
+        doc = await self._get_owned_doc(document_id, user)
+        tree = None
+        if doc.status == DocumentStatus.READY:
+            tree = await DocumentContentTreeService.build_tree(self.db, doc.id)
+        base = DocumentRead.model_validate(doc)
+        return DocumentReadWithContent(
+            **base.model_dump(),
+            document_content_tree=tree,
+        )
+
     async def update_document_settings(
         self,
         document_id: uuid.UUID,
@@ -171,15 +188,13 @@ class DocumentService:
         user: User,
     ) -> Document:
         doc = await self._get_owned_doc(document_id, user)
-        if doc.document_content_tree is None:
+        if doc.status != DocumentStatus.READY:
             raise DocumentNotProcessedError()
 
-        updated_map = {n.id: n.model_dump() for n in body.nodes}
-        typed_nodes = DocumentContentTreeService.parse_nodes(
-            doc.document_content_tree["nodes"]
-        )
-        patched = DocumentContentTreeService.patch(typed_nodes, updated_map)
-        doc.document_content_tree["nodes"] = [n.model_dump() for n in patched]
+        updates = {
+            n.id: n.model_dump(exclude={"id", "children"}) for n in body.nodes
+        }
+        await DocumentContentTreeService.apply_updates(self.db, doc.id, updates)
         await self.db.flush()
         return doc
 

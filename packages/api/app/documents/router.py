@@ -78,7 +78,7 @@ async def get_document(
     current_user: User = Depends(get_current_user),
     svc: DocumentService = Depends(get_document_service),
 ):
-    return await svc.get_document(document_id, current_user)
+    return await svc.get_document_with_content(document_id, current_user)
 
 
 @router.patch(

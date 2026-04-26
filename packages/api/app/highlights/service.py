@@ -4,6 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.documents import DocumentService
+from app.documents.models import DocumentStatus
 from app.users import User
 
 from .errors import (
@@ -25,7 +26,7 @@ class HighlightService:
 
     async def _get_owned_doc(self, document_id: uuid.UUID, user: User) -> None:
         doc = await self.document_service.get_document(document_id, user)
-        if doc.document_content_tree is None:
+        if doc.status != DocumentStatus.READY:
             raise DocumentNotReadyError()
 
     async def list_highlights(
