@@ -1,3 +1,4 @@
+import asyncio
 import uuid
 from collections.abc import AsyncIterator
 
@@ -49,6 +50,32 @@ class DocumentService:
         self, document_id: uuid.UUID, user: User
     ) -> AsyncIterator[str]:
         doc = await self._get_owned_doc(document_id, user)
+
+        # Already processed — skip re-running the parse.
+        if doc.status == DocumentStatus.READY:
+            yield "ready"
+            return
+
+        # Another request is already processing this doc; attach to that run
+        # by polling the row until it settles. Bounded to avoid hanging
+        # forever if the producing process died mid-parse.
+        if doc.status == DocumentStatus.PROCESSING:
+            yield "started"
+            poll_interval = 1
+            max_wait = 600
+            elapsed = 0
+            while elapsed < max_wait:
+                await asyncio.sleep(poll_interval)
+                elapsed += poll_interval
+                await self.db.refresh(doc)
+                if doc.status == DocumentStatus.READY:
+                    yield "ready"
+                    return
+                if doc.status == DocumentStatus.FAILED:
+                    yield "error"
+                    return
+            yield "error"
+            return
 
         try:
             doc.status = DocumentStatus.PROCESSING
