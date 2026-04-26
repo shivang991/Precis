@@ -1,38 +1,62 @@
 import React from 'react';
 
-import { View, Text, StyleSheet, ViewStyle } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ViewStyle } from 'react-native';
 
-import type { DocumentContentTreeNodeOutput, TextHighlightRead } from '@precis/shared';
+import type {
+  DocumentContentTreeNodeOutput,
+  TableHighlightRead,
+  TextHighlightRead,
+} from '@precis/shared';
 
 import { HighlightableText } from './HighlightableText';
 
+export type Highlight = TextHighlightRead | TableHighlightRead;
+
 interface NodeRendererProps {
   nodes: DocumentContentTreeNodeOutput[];
-  highlights: TextHighlightRead[];
+  highlights: Highlight[];
+  onToggleTableHeader?: (nodeId: string, kind: 'row' | 'column', index: number) => void;
 }
 
-export function NodeRenderer({ nodes, highlights }: NodeRendererProps) {
+export function NodeRenderer({ nodes, highlights, onToggleTableHeader }: NodeRendererProps) {
   return (
     <>
       {nodes.map((node) => (
-        <RenderNode key={node.id} node={node} highlights={highlights} />
+        <RenderNode
+          key={node.id}
+          node={node}
+          highlights={highlights}
+          onToggleTableHeader={onToggleTableHeader}
+        />
       ))}
     </>
   );
 }
 
+function isTextHighlight(h: Highlight): h is TextHighlightRead {
+  return h.type === 'text' || h.type === undefined;
+}
+
+function isTableHighlight(h: Highlight): h is TableHighlightRead {
+  return h.type === 'table';
+}
+
 function RenderNode({
   node,
   highlights,
+  onToggleTableHeader,
 }: {
   node: DocumentContentTreeNodeOutput;
-  highlights: TextHighlightRead[];
+  highlights: Highlight[];
+  onToggleTableHeader?: (nodeId: string, kind: 'row' | 'column', index: number) => void;
 }) {
-  const nodeHighlights = highlights.filter((h) => h.node_id === node.id);
   const content = node.content;
 
   switch (content.type) {
     case 'text': {
+      const nodeTextHighlights = highlights
+        .filter(isTextHighlight)
+        .filter((h) => h.node_id === node.id);
       if (content.level != null) {
         const level = content.level;
         const typo = headingTypography[level] ?? headingTypography[1];
@@ -41,20 +65,24 @@ function RenderNode({
             <HighlightableText
               nodeId={node.id}
               text={content.text}
-              highlights={nodeHighlights}
+              highlights={nodeTextHighlights}
               fontSize={typo.fontSize}
               lineHeight={typo.lineHeight}
               bold
             />
             {node.children && node.children.length > 0 && (
-              <NodeRenderer nodes={node.children} highlights={highlights} />
+              <NodeRenderer
+                nodes={node.children}
+                highlights={highlights}
+                onToggleTableHeader={onToggleTableHeader}
+              />
             )}
           </View>
         );
       }
       return (
         <View style={styles.paragraphContainer}>
-          <HighlightableText nodeId={node.id} text={content.text} highlights={nodeHighlights} />
+          <HighlightableText nodeId={node.id} text={content.text} highlights={nodeTextHighlights} />
         </View>
       );
     }
@@ -62,23 +90,56 @@ function RenderNode({
     case 'table': {
       const headers = (content.headers ?? []) as unknown[];
       const rows = (content.rows ?? []) as unknown[][];
+      const tableHighlights = highlights
+        .filter(isTableHighlight)
+        .filter((h) => h.node_id === node.id);
+      const highlightedRows = new Set<number>(tableHighlights.flatMap((h) => h.rows));
+      const highlightedCols = new Set<number>(tableHighlights.flatMap((h) => h.columns));
+      const cellIsHighlighted = (ri: number, ci: number) =>
+        highlightedRows.has(ri) || highlightedCols.has(ci);
+
       return (
         <View style={styles.table}>
           {headers.length > 0 && (
             <View style={styles.tableRow}>
-              {headers.map((h, i) => (
-                <Text key={i} style={styles.tableHeader}>
-                  {String(h ?? '')}
-                </Text>
+              <View style={[styles.rowIndexHeader]} />
+              {headers.map((h, ci) => (
+                <TouchableOpacity
+                  key={ci}
+                  onPress={() => onToggleTableHeader?.(node.id, 'column', ci)}
+                  activeOpacity={0.7}
+                  style={[
+                    styles.tableHeader,
+                    highlightedCols.has(ci) ? styles.headerSelected : null,
+                  ]}
+                >
+                  <Text style={styles.tableHeaderText}>{String(h ?? '')}</Text>
+                </TouchableOpacity>
               ))}
             </View>
           )}
           {rows.map((row, ri) => (
             <View key={ri} style={styles.tableRow}>
+              <TouchableOpacity
+                onPress={() => onToggleTableHeader?.(node.id, 'row', ri)}
+                activeOpacity={0.7}
+                style={[
+                  styles.rowIndexCell,
+                  highlightedRows.has(ri) ? styles.headerSelected : null,
+                ]}
+              >
+                <Text style={styles.rowIndexText}>{ri + 1}</Text>
+              </TouchableOpacity>
               {row.map((cell, ci) => (
-                <Text key={ci} style={styles.tableCell}>
-                  {String(cell ?? '')}
-                </Text>
+                <View
+                  key={ci}
+                  style={[
+                    styles.tableCell,
+                    cellIsHighlighted(ri, ci) ? styles.cellHighlighted : null,
+                  ]}
+                >
+                  <Text style={styles.tableCellText}>{String(cell ?? '')}</Text>
+                </View>
               ))}
             </View>
           ))}
@@ -109,6 +170,8 @@ const headingSpacing: Record<number, ViewStyle> = {
   6: { marginTop: 8, marginBottom: 2 },
 };
 
+const ROW_INDEX_WIDTH = 28;
+
 const styles = StyleSheet.create({
   headingContainer: {},
   paragraphContainer: { marginBottom: 12 },
@@ -118,6 +181,21 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: '#ddd',
   },
-  tableHeader: { flex: 1, padding: 8, fontWeight: '600', fontSize: 13, backgroundColor: '#f5f5f5' },
-  tableCell: { flex: 1, padding: 8, fontSize: 13 },
+  tableHeader: { flex: 1, padding: 8, backgroundColor: '#f5f5f5' },
+  tableHeaderText: { fontWeight: '600', fontSize: 13 },
+  tableCell: { flex: 1, padding: 8 },
+  tableCellText: { fontSize: 13 },
+  cellHighlighted: { backgroundColor: '#FFF176' },
+  rowIndexHeader: {
+    width: ROW_INDEX_WIDTH,
+    backgroundColor: '#f5f5f5',
+  },
+  rowIndexCell: {
+    width: ROW_INDEX_WIDTH,
+    padding: 8,
+    backgroundColor: '#fafafa',
+    alignItems: 'center',
+  },
+  rowIndexText: { fontSize: 11, color: '#888', fontWeight: '600' },
+  headerSelected: { backgroundColor: '#FFE082' },
 });

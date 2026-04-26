@@ -14,9 +14,9 @@ from .errors import (
     HighlightTypeMismatchError,
     NodeNotFoundError,
 )
-from .handlers import HighlightHandler, TextHighlightHandler
-from .models import TextHighlight
-from .schemas import HighlightCreate, TextHighlightCreate
+from .handlers import HighlightHandler, TableHighlightHandler, TextHighlightHandler
+from .models import TableHighlight, TextHighlight
+from .schemas import HighlightCreate, TableHighlightCreate, TextHighlightCreate
 
 
 class HighlightService:
@@ -29,6 +29,7 @@ class HighlightService:
         self.document_service = document_service
         self.handlers: dict[NodeType, HighlightHandler[Any, Any]] = {
             NodeType.text: TextHighlightHandler(),
+            NodeType.table: TableHighlightHandler(),
         }
 
     async def _get_owned_doc(self, document_id: uuid.UUID, user: User) -> None:
@@ -148,6 +149,8 @@ class HighlightService:
 
 __all__ = [
     "HighlightService",
+    "TableHighlight",
+    "TableHighlightCreate",
     "TextHighlight",
     "TextHighlightCreate",
 ]

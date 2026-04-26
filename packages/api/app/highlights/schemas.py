@@ -1,8 +1,8 @@
 import uuid
 from datetime import datetime
-from typing import Literal
+from typing import Annotated, Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class TextHighlightCreate(BaseModel):
@@ -27,7 +27,33 @@ class TextHighlightRead(BaseModel):
     model_config = {"from_attributes": True}
 
 
-# Discriminated unions on `type` — currently single-variant; adding the
-# table/image variants is a one-line change once those handlers exist.
-HighlightCreate = TextHighlightCreate
-HighlightRead = TextHighlightRead
+class TableHighlightCreate(BaseModel):
+    type: Literal["table"] = "table"
+    node_id: uuid.UUID
+    rows: list[int] = Field(default_factory=list)
+    columns: list[int] = Field(default_factory=list)
+    note: str | None = None
+
+
+class TableHighlightRead(BaseModel):
+    type: Literal["table"] = "table"
+    id: uuid.UUID
+    document_id: uuid.UUID
+    node_id: uuid.UUID
+    rows: list[int]
+    columns: list[int]
+    note: str | None = None
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+HighlightCreate = Annotated[
+    TextHighlightCreate | TableHighlightCreate,
+    Field(discriminator="type"),
+]
+HighlightRead = Annotated[
+    TextHighlightRead | TableHighlightRead,
+    Field(discriminator="type"),
+]
