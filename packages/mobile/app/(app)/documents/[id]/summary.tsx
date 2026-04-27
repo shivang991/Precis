@@ -16,11 +16,12 @@ import { useQuery } from '@tanstack/react-query';
 
 import type {
   DocumentContentTreeNodeOutput,
+  ImageHighlightRead,
   TableHighlightRead,
   TextHighlightRead,
 } from '@precis/shared';
 
-type Highlight = TextHighlightRead | TableHighlightRead;
+type Highlight = TextHighlightRead | TableHighlightRead | ImageHighlightRead;
 
 import { useApi } from '../../../../hooks/useApi';
 
@@ -142,6 +143,26 @@ function RenderNode({
         </View>
       );
     }
+    case 'image': {
+      const imageHls = (nodeHighlights ?? []).filter(
+        (h): h is ImageHighlightRead => h.type === 'image',
+      );
+      if (imageHls.length === 0) return null;
+      const alt = content.alt ?? 'Image';
+      return (
+        <View style={styles.paragraphContainer}>
+          {imageHls.map((h) => (
+            <View key={h.id} style={styles.imagePreview}>
+              <Text style={styles.imagePreviewLabel}>Image highlight</Text>
+              <View style={styles.imageThumbnail}>
+                <Text style={styles.imageThumbnailLabel}>IMG</Text>
+              </View>
+              <Text style={styles.imagePreviewAlt}>{alt}</Text>
+            </View>
+          ))}
+        </View>
+      );
+    }
     case 'text': {
       if (content.level != null) {
         const level = content.level;
@@ -160,7 +181,7 @@ function RenderNode({
         );
       }
       const textHls = (nodeHighlights ?? []).filter(
-        (h): h is TextHighlightRead => h.type !== 'table',
+        (h): h is TextHighlightRead => h.type !== 'table' && h.type !== 'image',
       );
       return textHls.length > 0 ? (
         <View style={styles.paragraphContainer}>
@@ -254,4 +275,32 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   tablePreviewText: { fontSize: 14, color: '#1a1a1a', lineHeight: 20 },
+  imagePreview: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderLeftWidth: 3,
+    borderLeftColor: '#FFC107',
+    paddingLeft: 10,
+    paddingVertical: 4,
+    marginBottom: 6,
+    gap: 10,
+  },
+  imageThumbnail: {
+    width: 48,
+    height: 48,
+    borderRadius: 4,
+    backgroundColor: '#FFF8C4',
+    borderWidth: 1,
+    borderColor: '#FFC107',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  imageThumbnailLabel: { fontSize: 10, fontWeight: '700', color: '#999', letterSpacing: 1 },
+  imagePreviewLabel: {
+    fontSize: 11,
+    color: '#999',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  imagePreviewAlt: { flex: 1, fontSize: 14, color: '#1a1a1a', lineHeight: 20 },
 });
