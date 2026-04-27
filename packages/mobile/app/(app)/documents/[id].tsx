@@ -14,9 +14,14 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
-import type { TextHighlightCreate, TextHighlightRead } from '@precis/shared';
+import type {
+  TableHighlightCreate,
+  TableHighlightRead,
+  TextHighlightCreate,
+  TextHighlightRead,
+} from '@precis/shared';
 
-import { NodeRenderer } from '../../../components/document/NodeRenderer';
+import { NodeRenderer, Highlight } from '../../../components/document/NodeRenderer';
 import {
   SelectionProvider,
   SelectionProviderHandle,
@@ -58,11 +63,16 @@ export default function DocumentViewerScreen() {
       });
   }, [document, api, id, qc]);
 
-  const { data: highlights = [] } = useQuery({
+  const { data: highlights = [] as Highlight[] } = useQuery<Highlight[]>({
     queryKey: ['highlights', id],
-    queryFn: () => api.listHighlights(id),
+    queryFn: () => api.listHighlights(id) as Promise<Highlight[]>,
     enabled: !!id && document?.status === 'ready',
   });
+
+  const textHighlights = useMemo(
+    () => highlights.filter((h): h is TextHighlightRead => h.type !== 'table'),
+    [highlights],
+  );
 
   const [selection, setSelection] = useState<NormalizedSelection | null>(null);
   const [highlighterOn, setHighlighterOn] = useState(true);
@@ -77,7 +87,7 @@ export default function DocumentViewerScreen() {
     if (!selection) return [] as Array<{ slice: NodeSlice; overs: TextHighlightRead[] }>;
     return selection.slices.map((slice) => ({
       slice,
-      overs: highlights.filter(
+      overs: textHighlights.filter(
         (h) =>
           h.node_id === slice.nodeId &&
           h.start_offset != null &&
@@ -86,7 +96,7 @@ export default function DocumentViewerScreen() {
           h.end_offset > slice.start,
       ),
     }));
-  }, [selection, highlights]);
+  }, [selection, textHighlights]);
 
   // Aggregate coverage over all slices:
   //   "none"    → no slice has any overlap
@@ -123,7 +133,9 @@ export default function DocumentViewerScreen() {
     return 'partial';
   }, [selection, overlappingByNode]);
 
-  const pendingAddsRef = useRef<Array<{ create: TextHighlightCreate; tempId: string }>>([]);
+  const pendingAddsRef = useRef<
+    Array<{ create: TextHighlightCreate | TableHighlightCreate; tempId: string }>
+  >([]);
   const pendingRemovalsRef = useRef<string[]>([]);
   const flushTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -180,6 +192,7 @@ export default function DocumentViewerScreen() {
       const tempId = `${TEMP_ID_PREFIX}${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
       const now = new Date().toISOString();
       const optimistic: TextHighlightRead = {
+        type: 'text',
         id: tempId,
         document_id: id,
         node_id: r.nodeId,
@@ -189,10 +202,35 @@ export default function DocumentViewerScreen() {
         updated_at: now,
       };
       pendingAddsRef.current.push({
-        create: { node_id: r.nodeId, start_offset: r.start, end_offset: r.end },
+        create: { type: 'text', node_id: r.nodeId, start_offset: r.start, end_offset: r.end },
         tempId,
       });
-      qc.setQueryData<TextHighlightRead[]>(['highlights', id], (prev = []) => [...prev, optimistic]);
+      qc.setQueryData<Highlight[]>(['highlights', id], (prev = []) => [...prev, optimistic]);
+      scheduleFlush();
+    },
+    [id, qc, scheduleFlush],
+  );
+
+  const addTableHighlight = useCallback(
+    (nodeId: string, rows: number[], columns: number[]) => {
+      if (rows.length === 0 && columns.length === 0) return;
+      const tempId = `${TEMP_ID_PREFIX}${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+      const now = new Date().toISOString();
+      const optimistic: TableHighlightRead = {
+        type: 'table',
+        id: tempId,
+        document_id: id,
+        node_id: nodeId,
+        rows,
+        columns,
+        created_at: now,
+        updated_at: now,
+      };
+      pendingAddsRef.current.push({
+        create: { type: 'table', node_id: nodeId, rows, columns },
+        tempId,
+      });
+      qc.setQueryData<Highlight[]>(['highlights', id], (prev = []) => [...prev, optimistic]);
       scheduleFlush();
     },
     [id, qc, scheduleFlush],
@@ -210,12 +248,33 @@ export default function DocumentViewerScreen() {
         }
       }
       const idSet = new Set(ids);
-      qc.setQueryData<TextHighlightRead[]>(['highlights', id], (prev = []) =>
+      qc.setQueryData<Highlight[]>(['highlights', id], (prev = []) =>
         prev.filter((h) => !idSet.has(h.id)),
       );
       scheduleFlush();
     },
     [id, qc, scheduleFlush],
+  );
+
+  const handleToggleTableHeader = useCallback(
+    (nodeId: string, kind: 'row' | 'column', index: number) => {
+      const existing = highlights.filter(
+        (h): h is TableHighlightRead =>
+          h.type === 'table' && h.node_id === nodeId && (h.note ?? null) === null,
+      );
+      const rowsSet = new Set<number>(existing.flatMap((h) => h.rows));
+      const colsSet = new Set<number>(existing.flatMap((h) => h.columns));
+      const target = kind === 'row' ? rowsSet : colsSet;
+      if (target.has(index)) target.delete(index);
+      else target.add(index);
+      removeHighlightsByIds(existing.map((h) => h.id));
+      const nextRows = [...rowsSet].sort((a, b) => a - b);
+      const nextCols = [...colsSet].sort((a, b) => a - b);
+      if (nextRows.length || nextCols.length) {
+        addTableHighlight(nodeId, nextRows, nextCols);
+      }
+    },
+    [highlights, removeHighlightsByIds, addTableHighlight],
   );
 
   const clearUiSelection = () => {
@@ -333,7 +392,11 @@ export default function DocumentViewerScreen() {
           disabled={!highlighterOn}
           onSelectionChange={handleSelectionChange}
         >
-          <NodeRenderer nodes={nodes} highlights={highlights} />
+          <NodeRenderer
+            nodes={nodes}
+            highlights={highlights}
+            onToggleTableHeader={handleToggleTableHeader}
+          />
         </SelectionProvider>
       </ScrollView>
 

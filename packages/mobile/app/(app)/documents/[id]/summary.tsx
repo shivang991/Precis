@@ -14,7 +14,13 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 
 import { useQuery } from '@tanstack/react-query';
 
-import type { DocumentContentTreeNodeOutput, TextHighlightRead } from '@precis/shared';
+import type {
+  DocumentContentTreeNodeOutput,
+  TableHighlightRead,
+  TextHighlightRead,
+} from '@precis/shared';
+
+type Highlight = TextHighlightRead | TableHighlightRead;
 
 import { useApi } from '../../../../hooks/useApi';
 
@@ -29,22 +35,25 @@ export default function SummaryViewScreen() {
     enabled: !!id,
   });
 
-  const { data: highlights = [], isLoading: hlLoading } = useQuery({
+  const { data: highlights = [] as Highlight[], isLoading: hlLoading } = useQuery<Highlight[]>({
     queryKey: ['highlights', id],
-    queryFn: () => api.listHighlights(id),
+    queryFn: () => api.listHighlights(id) as Promise<Highlight[]>,
     enabled: !!id && document?.status === 'ready',
   });
 
   const highlightsByNode = useMemo(() => {
-    const map = new Map<string, TextHighlightRead[]>();
+    const map = new Map<string, Highlight[]>();
     for (const h of highlights) {
-      if (h.start_offset == null || h.end_offset == null) continue;
       const list = map.get(h.node_id);
       if (list) list.push(h);
       else map.set(h.node_id, [h]);
     }
     for (const list of map.values()) {
-      list.sort((a, b) => (a.start_offset ?? 0) - (b.start_offset ?? 0));
+      list.sort((a, b) => {
+        const sa = 'start_offset' in a ? (a.start_offset ?? 0) : 0;
+        const sb = 'start_offset' in b ? (b.start_offset ?? 0) : 0;
+        return sa - sb;
+      });
     }
     return map;
   }, [highlights]);
@@ -84,7 +93,7 @@ export default function SummaryViewScreen() {
 // Returns true if this subtree contains any highlights.
 function subtreeHasHighlights(
   node: DocumentContentTreeNodeOutput,
-  highlightsByNode: Map<string, TextHighlightRead[]>,
+  highlightsByNode: Map<string, Highlight[]>,
 ): boolean {
   if (highlightsByNode.has(node.id)) return true;
   if (node.children) {
@@ -100,7 +109,7 @@ function RenderNode({
   highlightsByNode,
 }: {
   node: DocumentContentTreeNodeOutput;
-  highlightsByNode: Map<string, TextHighlightRead[]>;
+  highlightsByNode: Map<string, Highlight[]>;
 }) {
   if (!subtreeHasHighlights(node, highlightsByNode)) return null;
 
@@ -108,6 +117,31 @@ function RenderNode({
   const content = node.content;
 
   switch (content.type) {
+    case 'table': {
+      const tableHls = (nodeHighlights ?? []).filter(
+        (h): h is TableHighlightRead => h.type === 'table',
+      );
+      if (tableHls.length === 0) return null;
+      const headers = (content.headers ?? []) as unknown[];
+      return (
+        <View style={styles.paragraphContainer}>
+          {tableHls.map((h) => (
+            <View key={h.id} style={styles.tablePreview}>
+              <Text style={styles.tablePreviewLabel}>Table highlight</Text>
+              <Text style={styles.tablePreviewText}>
+                {h.rows.length > 0 ? `Rows: ${h.rows.map((r) => r + 1).join(', ')}` : null}
+                {h.rows.length > 0 && h.columns.length > 0 ? '  ·  ' : null}
+                {h.columns.length > 0
+                  ? `Cols: ${h.columns
+                      .map((c) => (headers[c] != null ? String(headers[c]) : `${c + 1}`))
+                      .join(', ')}`
+                  : null}
+              </Text>
+            </View>
+          ))}
+        </View>
+      );
+    }
     case 'text': {
       if (content.level != null) {
         const level = content.level;
@@ -125,9 +159,12 @@ function RenderNode({
           </View>
         );
       }
-      return nodeHighlights ? (
+      const textHls = (nodeHighlights ?? []).filter(
+        (h): h is TextHighlightRead => h.type !== 'table',
+      );
+      return textHls.length > 0 ? (
         <View style={styles.paragraphContainer}>
-          <HighlightedSpans text={content.text} highlights={nodeHighlights} />
+          <HighlightedSpans text={content.text} highlights={textHls} />
         </View>
       ) : null;
     }
@@ -203,4 +240,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: 2,
   },
   empty: { textAlign: 'center', color: '#999', marginTop: 64, lineHeight: 24 },
+  tablePreview: {
+    borderLeftWidth: 3,
+    borderLeftColor: '#FFC107',
+    paddingLeft: 10,
+    paddingVertical: 4,
+    marginBottom: 6,
+  },
+  tablePreviewLabel: {
+    fontSize: 11,
+    color: '#999',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  tablePreviewText: { fontSize: 14, color: '#1a1a1a', lineHeight: 20 },
 });
