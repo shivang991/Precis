@@ -1,5 +1,6 @@
 import uuid
 from datetime import datetime
+from typing import ClassVar, Literal
 
 from sqlalchemy import DateTime, ForeignKey, Integer, Text, func
 from sqlalchemy.dialects.postgresql import ARRAY, UUID
@@ -11,13 +12,15 @@ from app.shared.database import Base
 class TextHighlight(Base):
     __tablename__ = "text_highlights"
 
+    type: ClassVar[Literal["text"]] = "text"
+
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     document_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("documents.id", ondelete="CASCADE"), index=True
     )
     node_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("document_nodes.id", ondelete="CASCADE"),
+        ForeignKey("text_contents.node_id", ondelete="CASCADE"),
         index=True,
     )
 
@@ -38,14 +41,17 @@ class TextHighlight(Base):
 class TableHighlight(Base):
     __tablename__ = "table_highlights"
 
+    type: ClassVar[Literal["table"]] = "table"
+
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     document_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("documents.id", ondelete="CASCADE"), index=True
     )
     node_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("document_nodes.id", ondelete="CASCADE"),
+        ForeignKey("table_contents.node_id", ondelete="CASCADE"),
         index=True,
+        unique=True,
     )
 
     rows: Mapped[list[int]] = mapped_column(ARRAY(Integer), nullable=False)
@@ -65,14 +71,17 @@ class TableHighlight(Base):
 class ImageHighlight(Base):
     __tablename__ = "image_highlights"
 
+    type: ClassVar[Literal["image"]] = "image"
+
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     document_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("documents.id", ondelete="CASCADE"), index=True
     )
     node_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("document_nodes.id", ondelete="CASCADE"),
+        ForeignKey("image_contents.node_id", ondelete="CASCADE"),
         index=True,
+        unique=True,
     )
 
     created_at: Mapped[datetime] = mapped_column(
