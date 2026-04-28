@@ -1,32 +1,14 @@
 import uuid
-from typing import Any
 
 from fastapi import APIRouter, Body, Depends, status
 
 from app.users import User, get_current_user
 
 from .dependencies import get_highlight_service
-from .models import ImageHighlight, TableHighlight, TextHighlight
-from .schemas import (
-    HighlightCreate,
-    HighlightRead,
-    ImageHighlightRead,
-    TableHighlightRead,
-    TextHighlightRead,
-)
+from .schemas import HighlightCreate, HighlightRead
 from .service import HighlightService
 
 router = APIRouter(prefix="/documents/{document_id}/highlights", tags=["highlights"])
-
-
-def _to_read(row: Any) -> HighlightRead:
-    if isinstance(row, TextHighlight):
-        return TextHighlightRead.model_validate(row)
-    if isinstance(row, TableHighlight):
-        return TableHighlightRead.model_validate(row)
-    if isinstance(row, ImageHighlight):
-        return ImageHighlightRead.model_validate(row)
-    raise TypeError(f"Unknown highlight row type: {type(row).__name__}")
 
 
 @router.get(
@@ -39,8 +21,7 @@ async def list_highlights(
     current_user: User = Depends(get_current_user),
     svc: HighlightService = Depends(get_highlight_service),
 ):
-    rows = await svc.list_highlights(document_id, current_user)
-    return [_to_read(r) for r in rows]
+    return await svc.list_highlights(document_id, current_user)
 
 
 @router.post(
@@ -55,8 +36,7 @@ async def add_highlights(
     current_user: User = Depends(get_current_user),
     svc: HighlightService = Depends(get_highlight_service),
 ):
-    rows = await svc.add_highlights(document_id, body, current_user)
-    return [_to_read(r) for r in rows]
+    return await svc.add_highlights(document_id, body, current_user)
 
 
 @router.delete(
