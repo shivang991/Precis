@@ -139,47 +139,41 @@ class HighlightService:
         document_id: uuid.UUID,
         bodies: list[TextHighlightCreate],
     ) -> None:
+        touched_node_ids = {b.node_id for b in bodies}
         existing_result = await self.db.execute(
             select(TextHighlight).where(
                 TextHighlight.document_id == document_id,
-                TextHighlight.node_id.in_({b.node_id for b in bodies}),
+                TextHighlight.node_id.in_(touched_node_ids),
             )
         )
-        # Group existing rows + incoming bodies by (node_id, note).
-        existing_by_group: dict[tuple[uuid.UUID, str | None], list[TextHighlight]] = {}
+        existing_by_node: dict[uuid.UUID, list[TextHighlight]] = {}
         for row in existing_result.scalars().all():
-            existing_by_group.setdefault((row.node_id, row.note), []).append(row)
+            existing_by_node.setdefault(row.node_id, []).append(row)
 
-        incoming_by_group: dict[tuple[uuid.UUID, str | None], list[tuple[int, int]]] = (
-            {}
-        )
+        incoming_by_node: dict[uuid.UUID, list[TextHighlightCreate]] = {}
         for body in bodies:
-            incoming_by_group.setdefault((body.node_id, body.note), []).append(
-                (body.start_offset, body.end_offset)
-            )
+            incoming_by_node.setdefault(body.node_id, []).append(body)
 
-        for key, incoming_ranges in incoming_by_group.items():
-            group_existing = existing_by_group.get(key, [])
-            merged = self._merge_ranges(
-                [(r.start_offset, r.end_offset) for r in group_existing]
-                + incoming_ranges
-            )
+        for node_id, incoming in incoming_by_node.items():
+            group_existing = existing_by_node.get(node_id, [])
+            merged = self._merge_text_ranges(group_existing, incoming)
 
             unused_existing = list(group_existing)
-            for start, end in merged:
+            for start, end, note in merged:
                 anchor = self._pick_anchor(unused_existing, start, end)
                 if anchor is not None:
                     anchor.start_offset = start
                     anchor.end_offset = end
+                    anchor.note = note
                     unused_existing.remove(anchor)
                 else:
                     self.db.add(
                         TextHighlight(
                             document_id=document_id,
-                            node_id=key[0],
+                            node_id=node_id,
                             start_offset=start,
                             end_offset=end,
-                            note=key[1],
+                            note=note,
                         )
                     )
 
@@ -245,19 +239,33 @@ class HighlightService:
             )
 
     @staticmethod
-    def _merge_ranges(ranges: list[tuple[int, int]]) -> list[tuple[int, int]]:
-        if not ranges:
+    def _merge_text_ranges(
+        existing: list[TextHighlight],
+        incoming: list[TextHighlightCreate],
+    ) -> list[tuple[int, int, str | None]]:
+        # (start, end, note, is_incoming, incoming_seq).
+        # When ranges overlap, incoming notes win — last incoming (by input order) takes precedence.
+        items: list[tuple[int, int, str | None, bool, int]] = []
+        for r in existing:
+            items.append((r.start_offset, r.end_offset, r.note, False, -1))
+        for idx, b in enumerate(incoming):
+            items.append((b.start_offset, b.end_offset, b.note, True, idx))
+        if not items:
             return []
-        ordered = sorted(ranges, key=lambda r: r[0])
-        merged: list[tuple[int, int]] = []
-        cur_start, cur_end = ordered[0]
-        for start, end in ordered[1:]:
+        items.sort(key=lambda i: i[0])
+
+        merged: list[tuple[int, int, str | None]] = []
+        cur_start, cur_end, cur_note, _, cur_inc_seq = items[0]
+        for start, end, note, is_incoming, inc_seq in items[1:]:
             if start <= cur_end:
                 cur_end = max(cur_end, end)
+                if is_incoming and inc_seq > cur_inc_seq:
+                    cur_note = note
+                    cur_inc_seq = inc_seq
             else:
-                merged.append((cur_start, cur_end))
-                cur_start, cur_end = start, end
-        merged.append((cur_start, cur_end))
+                merged.append((cur_start, cur_end, cur_note))
+                cur_start, cur_end, cur_note, cur_inc_seq = start, end, note, inc_seq
+        merged.append((cur_start, cur_end, cur_note))
         return merged
 
     @staticmethod
