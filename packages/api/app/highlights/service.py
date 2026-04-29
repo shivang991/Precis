@@ -23,14 +23,14 @@ from .schemas import (
 
 HighlightRow = TextHighlight | TableHighlight | ImageHighlight
 
-_BODY_TYPE_TO_NODE_TYPE: dict[str, NodeType] = {
-    "text": NodeType.text,
-    "table": NodeType.table,
-    "image": NodeType.image,
-}
-
 
 class HighlightService:
+    _BODY_TYPE_TO_NODE_TYPE: dict[str, NodeType] = {
+        "text": NodeType.text,
+        "table": NodeType.table,
+        "image": NodeType.image,
+    }
+
     def __init__(
         self,
         db: AsyncSession,
@@ -39,10 +39,7 @@ class HighlightService:
         self.db = db
         self.document_service = document_service
 
-    async def _assert_doc_ready(self, document_id: uuid.UUID, user: User) -> None:
-        doc = await self.document_service.get_document(document_id, user)
-        if doc.status != DocumentStatus.READY:
-            raise DocumentNotReadyError()
+    # --- Public API ---
 
     async def list_highlights(
         self,
@@ -85,7 +82,7 @@ class HighlightService:
             node_type = node_type_by_id.get(body.node_id)
             if node_type is None:
                 raise NodeNotFoundError()
-            if _BODY_TYPE_TO_NODE_TYPE[body.type] != node_type:
+            if self._BODY_TYPE_TO_NODE_TYPE[body.type] != node_type:
                 raise HighlightTypeMismatchError()
             if isinstance(body, TextHighlightCreate):
                 text_bodies.append(body)
@@ -100,6 +97,42 @@ class HighlightService:
             await self._add_table(document_id, table_bodies)
         if image_bodies:
             await self._add_image(document_id, image_bodies)
+
+    async def remove_highlights(
+        self,
+        document_id: uuid.UUID,
+        highlight_ids: list[uuid.UUID],
+        user: User,
+    ) -> None:
+        await self._assert_doc_ready(document_id, user)
+        if not highlight_ids:
+            return
+
+        found_ids: set[uuid.UUID] = set()
+        rows_to_delete: list[HighlightRow] = []
+        for model in (TextHighlight, TableHighlight, ImageHighlight):
+            result = await self.db.execute(
+                select(model).where(
+                    model.id.in_(highlight_ids),
+                    model.document_id == document_id,
+                )
+            )
+            for row in result.scalars().all():
+                found_ids.add(row.id)
+                rows_to_delete.append(row)
+
+        if found_ids != set(highlight_ids):
+            raise HighlightNotFoundError()
+
+        for row in rows_to_delete:
+            await self.db.delete(row)
+
+    # --- Private API ---
+
+    async def _assert_doc_ready(self, document_id: uuid.UUID, user: User) -> None:
+        doc = await self.document_service.get_document(document_id, user)
+        if doc.status != DocumentStatus.READY:
+            raise DocumentNotReadyError()
 
     async def _add_text(
         self,
@@ -127,14 +160,14 @@ class HighlightService:
 
         for key, incoming_ranges in incoming_by_group.items():
             group_existing = existing_by_group.get(key, [])
-            merged = _merge_ranges(
+            merged = self._merge_ranges(
                 [(r.start_offset, r.end_offset) for r in group_existing]
                 + incoming_ranges
             )
 
             unused_existing = list(group_existing)
             for start, end in merged:
-                anchor = _pick_anchor(unused_existing, start, end)
+                anchor = self._pick_anchor(unused_existing, start, end)
                 if anchor is not None:
                     anchor.start_offset = start
                     anchor.end_offset = end
@@ -211,57 +244,30 @@ class HighlightService:
                 ImageHighlight(document_id=document_id, node_id=body.node_id)
             )
 
-    async def remove_highlights(
-        self,
-        document_id: uuid.UUID,
-        highlight_ids: list[uuid.UUID],
-        user: User,
-    ) -> None:
-        await self._assert_doc_ready(document_id, user)
-        if not highlight_ids:
-            return
+    @staticmethod
+    def _merge_ranges(ranges: list[tuple[int, int]]) -> list[tuple[int, int]]:
+        if not ranges:
+            return []
+        ordered = sorted(ranges, key=lambda r: r[0])
+        merged: list[tuple[int, int]] = []
+        cur_start, cur_end = ordered[0]
+        for start, end in ordered[1:]:
+            if start <= cur_end:
+                cur_end = max(cur_end, end)
+            else:
+                merged.append((cur_start, cur_end))
+                cur_start, cur_end = start, end
+        merged.append((cur_start, cur_end))
+        return merged
 
-        found_ids: set[uuid.UUID] = set()
-        rows_to_delete: list[HighlightRow] = []
-        for model in (TextHighlight, TableHighlight, ImageHighlight):
-            result = await self.db.execute(
-                select(model).where(
-                    model.id.in_(highlight_ids),
-                    model.document_id == document_id,
-                )
-            )
-            for row in result.scalars().all():
-                found_ids.add(row.id)
-                rows_to_delete.append(row)
-
-        if found_ids != set(highlight_ids):
-            raise HighlightNotFoundError()
-
-        for row in rows_to_delete:
-            await self.db.delete(row)
-
-
-def _merge_ranges(ranges: list[tuple[int, int]]) -> list[tuple[int, int]]:
-    if not ranges:
-        return []
-    ordered = sorted(ranges, key=lambda r: r[0])
-    merged: list[tuple[int, int]] = []
-    cur_start, cur_end = ordered[0]
-    for start, end in ordered[1:]:
-        if start <= cur_end:
-            cur_end = max(cur_end, end)
-        else:
-            merged.append((cur_start, cur_end))
-            cur_start, cur_end = start, end
-    merged.append((cur_start, cur_end))
-    return merged
-
-
-def _pick_anchor(
-    rows: list[TextHighlight], start: int, end: int
-) -> TextHighlight | None:
-    """Earliest-created row whose range overlaps [start, end]."""
-    overlapping = [r for r in rows if r.start_offset <= end and r.end_offset >= start]
-    if not overlapping:
-        return None
-    return min(overlapping, key=lambda r: r.created_at)
+    @staticmethod
+    def _pick_anchor(
+        rows: list[TextHighlight], start: int, end: int
+    ) -> TextHighlight | None:
+        """Earliest-created row whose range overlaps [start, end]."""
+        overlapping = [
+            r for r in rows if r.start_offset <= end and r.end_offset >= start
+        ]
+        if not overlapping:
+            return None
+        return min(overlapping, key=lambda r: r.created_at)
