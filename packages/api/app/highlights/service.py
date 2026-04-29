@@ -64,10 +64,10 @@ class HighlightService:
         document_id: uuid.UUID,
         bodies: list[HighlightCreate],
         user: User,
-    ) -> list[HighlightRow]:
+    ) -> None:
         await self._assert_doc_ready(document_id, user)
         if not bodies:
-            return []
+            return
 
         node_ids = {b.node_id for b in bodies}
         nodes_result = await self.db.execute(
@@ -94,36 +94,27 @@ class HighlightService:
             else:
                 image_bodies.append(body)
 
-        created: list[HighlightRow] = []
         if text_bodies:
-            created.extend(await self._add_text(document_id, text_bodies))
+            await self._add_text(document_id, text_bodies)
         if table_bodies:
-            created.extend(await self._add_table(document_id, table_bodies))
+            await self._add_table(document_id, table_bodies)
         if image_bodies:
-            created.extend(await self._add_image(document_id, image_bodies))
-
-        await self.db.flush()
-        for row in created:
-            await self.db.refresh(row)
-        return created
+            await self._add_image(document_id, image_bodies)
 
     async def _add_text(
         self,
         document_id: uuid.UUID,
         bodies: list[TextHighlightCreate],
-    ) -> list[TextHighlight]:
-        touched_node_ids = {b.node_id for b in bodies}
+    ) -> None:
         existing_result = await self.db.execute(
             select(TextHighlight).where(
                 TextHighlight.document_id == document_id,
-                TextHighlight.node_id.in_(touched_node_ids),
+                TextHighlight.node_id.in_({b.node_id for b in bodies}),
             )
         )
-        existing_rows = list(existing_result.scalars().all())
-
         # Group existing rows + incoming bodies by (node_id, note).
         existing_by_group: dict[tuple[uuid.UUID, str | None], list[TextHighlight]] = {}
-        for row in existing_rows:
+        for row in existing_result.scalars().all():
             existing_by_group.setdefault((row.node_id, row.note), []).append(row)
 
         incoming_by_group: dict[tuple[uuid.UUID, str | None], list[tuple[int, int]]] = (
@@ -134,7 +125,6 @@ class HighlightService:
                 (body.start_offset, body.end_offset)
             )
 
-        created: list[TextHighlight] = []
         for key, incoming_ranges in incoming_by_group.items():
             group_existing = existing_by_group.get(key, [])
             merged = _merge_ranges(
@@ -150,26 +140,24 @@ class HighlightService:
                     anchor.end_offset = end
                     unused_existing.remove(anchor)
                 else:
-                    row = TextHighlight(
-                        document_id=document_id,
-                        node_id=key[0],
-                        start_offset=start,
-                        end_offset=end,
-                        note=key[1],
+                    self.db.add(
+                        TextHighlight(
+                            document_id=document_id,
+                            node_id=key[0],
+                            start_offset=start,
+                            end_offset=end,
+                            note=key[1],
+                        )
                     )
-                    self.db.add(row)
-                    created.append(row)
 
             for row in unused_existing:
                 await self.db.delete(row)
-
-        return created
 
     async def _add_table(
         self,
         document_id: uuid.UUID,
         bodies: list[TableHighlightCreate],
-    ) -> list[TableHighlight]:
+    ) -> None:
         touched_node_ids = {b.node_id for b in bodies}
         existing_result = await self.db.execute(
             select(TableHighlight).where(
@@ -179,7 +167,6 @@ class HighlightService:
         )
         existing_by_node = {r.node_id: r for r in existing_result.scalars().all()}
 
-        created: list[TableHighlight] = []
         # Last body wins for any duplicate node_id within the same request.
         bodies_by_node: dict[uuid.UUID, TableHighlightCreate] = {
             b.node_id: b for b in bodies
@@ -187,32 +174,25 @@ class HighlightService:
         for node_id, body in bodies_by_node.items():
             row = existing_by_node.get(node_id)
             if row is None:
-                row = TableHighlight(
-                    document_id=document_id,
-                    node_id=node_id,
-                    rows=list(body.rows),
-                    columns=list(body.columns),
-                    note=body.note,
+                self.db.add(
+                    TableHighlight(
+                        document_id=document_id,
+                        node_id=node_id,
+                        rows=list(body.rows),
+                        columns=list(body.columns),
+                        note=body.note,
+                    )
                 )
-                self.db.add(row)
-                created.append(row)
-                continue
-            if (
-                list(row.rows or []) == list(body.rows)
-                and list(row.columns or []) == list(body.columns)
-                and row.note == body.note
-            ):
                 continue
             row.rows = list(body.rows)
             row.columns = list(body.columns)
             row.note = body.note
-        return created
 
     async def _add_image(
         self,
         document_id: uuid.UUID,
         bodies: list[ImageHighlightCreate],
-    ) -> list[ImageHighlight]:
+    ) -> None:
         touched_node_ids = {b.node_id for b in bodies}
         existing_result = await self.db.execute(
             select(ImageHighlight.node_id).where(
@@ -222,16 +202,14 @@ class HighlightService:
         )
         existing_node_ids = {nid for (nid,) in existing_result.all()}
 
-        created: list[ImageHighlight] = []
         seen: set[uuid.UUID] = set()
         for body in bodies:
             if body.node_id in existing_node_ids or body.node_id in seen:
                 continue
             seen.add(body.node_id)
-            row = ImageHighlight(document_id=document_id, node_id=body.node_id)
-            self.db.add(row)
-            created.append(row)
-        return created
+            self.db.add(
+                ImageHighlight(document_id=document_id, node_id=body.node_id)
+            )
 
     async def remove_highlights(
         self,

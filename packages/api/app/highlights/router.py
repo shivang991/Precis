@@ -26,8 +26,7 @@ async def list_highlights(
 
 @router.post(
     "/",
-    response_model=list[HighlightRead],
-    status_code=status.HTTP_201_CREATED,
+    status_code=status.HTTP_204_NO_CONTENT,
     operation_id="add_highlights",
 )
 async def add_highlights(
@@ -36,7 +35,7 @@ async def add_highlights(
     current_user: User = Depends(get_current_user),
     svc: HighlightService = Depends(get_highlight_service),
 ):
-    return await svc.add_highlights(document_id, body, current_user)
+    await svc.add_highlights(document_id, body, current_user)
 
 
 @router.delete(
